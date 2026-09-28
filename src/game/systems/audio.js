@@ -1,6 +1,7 @@
 // OWNER: systems engineer. (audio r1) File-based WebAudio: pre-rendered ambient cinematic score + tonal SFX, all made
-// offline by tools/audio/build.py (numpy synthesis, no samples; see tools/audio/README.md). No noise beds, no wind,
-// no whooshes: speed / height are felt through the music's swing layers.
+// offline by tools/audio/build.py (numpy synthesis, no samples; see tools/audio/README.md). Web / movement / combat / UI
+// taps are realistic foley (tools/audio/foley.py). No noise beds, no wind, no traversal whooshes: speed / height are felt
+// through the music's swing layers.
 //   music:  4 synchronised seamless loops (72 BPM x 64 bars, same harmony) started on one AudioContext time:
 //           day / night beds (equal-power crossfade from nightK) + pulseA / pulseB swing layers (gain from traversal speed)
 //   sfx:    sprites (trav / combat / ui / world) + JSON map (manifest.json: offsets, variations, design gain, voice limit,
@@ -20,8 +21,13 @@ const sstep = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t 
 export function createAudio() {
   const AC = window.AudioContext || window.webkitAudioContext;
   let ac = null, ready = false, man = null, master, comp, muffle, musicLP, musicDuck, loadErr = null;
-  const vol = { master: 0.8, music: 0.6, sfx: 0.9, ambience: 0.75, ui: 0.7 };
-  const MUSIC_K = 0.18; // (user r-quietmusic) "reduce the music to very low amount": the whole score sits ~15 dB under (the slider scales on top)
+  const vol = { master: 1, music: 0.7, sfx: 0.7, ambience: 0.7, ui: 0.7 };
+  const FOLEY_K = 0.1; // (user r-foley2) "they are too loud rn, make them 90% less loud": every foley sound (manifest fk) x0.1
+  // (user r-mixdefaults) the user's tuned mix was master 80 % with music 4 / effects 16 / ambience 10 / interface 6 %
+  // (music already x0.09 internally). That exact mix is now the default at master 100 % and every other slider at 70 %:
+  // TRIM folds the old master (0.8) and the found slider levels into each bus, so bus gain = slider x TRIM.
+  const MIX = { master: 0.8, music: 0.04 * 0.09, sfx: 0.16, ambience: 0.10, ui: 0.06 }, D = 0.7;
+  const TRIM = { music: MIX.master * MIX.music / D, sfx: MIX.master * MIX.sfx / D, ambience: MIX.master * MIX.ambience / D, ui: MIX.master * MIX.ui / D };
   const bus = {}, bufs = {}, mbufs = {}, lbufs = {}, voices = new Map();
   const music = { started: false, t0: 0, layer: {}, night: 0, I: 0, dayG: 0, nightG: 0, aG: 0, bG: 0 };
   const listenerPos = new THREE.Vector3(), _f = new THREE.Vector3();
@@ -38,12 +44,12 @@ export function createAudio() {
     comp = ac.createDynamicsCompressor(); comp.threshold.value = -8; comp.knee.value = 6; comp.ratio.value = 3; comp.attack.value = 0.005; comp.release.value = 0.25;
     master.connect(comp).connect(ac.destination);
     musicLP = ac.createBiquadFilter(); musicLP.type = 'lowpass'; musicLP.frequency.value = 20000; musicLP.Q.value = 0.5;
-    musicDuck = G(1); bus.music = G(vol.music * MUSIC_K); bus.music.connect(musicDuck).connect(musicLP).connect(master);
+    musicDuck = G(1); bus.music = G(vol.music * TRIM.music); bus.music.connect(musicDuck).connect(musicLP).connect(master);
     muffle = ac.createBiquadFilter(); muffle.type = 'lowpass'; muffle.frequency.value = 20000; muffle.Q.value = 0.5;
     const world = G(1); world.connect(muffle).connect(master);
-    bus.sfx = G(vol.sfx); bus.sfx.connect(world);
-    bus.ambience = G(vol.ambience); bus.ambience.connect(world);
-    bus.ui = G(vol.ui); bus.ui.connect(master);
+    bus.sfx = G(vol.sfx * TRIM.sfx); bus.sfx.connect(world);
+    bus.ambience = G(vol.ambience * TRIM.ambience); bus.ambience.connect(world);
+    bus.ui = G(vol.ui * TRIM.ui); bus.ui.connect(master);
     ready = true;
     load();
   }
@@ -105,7 +111,7 @@ export function createAudio() {
     const [off, dur] = s.v[k];
     const rate = (o.rate || 1) * (1 + (Math.random() * 2 - 1) * (s.jit || 0));
     const src = ac.createBufferSource(); src.buffer = buf; src.playbackRate.value = rate;
-    const g = G(s.gain * (o.gain ?? 1));
+    const g = G(s.gain * (o.gain ?? 1) * (s.fk ? FOLEY_K : 1));
     let node = src.connect(g);
     if (o.pos) {
       const p = ac.createPanner(); p.panningModel = 'HRTF'; p.distanceModel = 'inverse'; p.refDistance = o.ref || 10; p.rolloffFactor = 1; p.maxDistance = 2000;
@@ -120,37 +126,20 @@ export function createAudio() {
     if (p.positionX) { p.positionX.value = v.x; p.positionY.value = v.y; p.positionZ.value = v.z; } else p.setPosition(v.x, v.y, v.z);
   }
 
-  // (user r-oldzip) "the web zip sounds are bad, bring back the old ones only": the previous live-synth web thwip
-  // (band-passed white-noise bursts + a falling triangle chirp), restored verbatim for the web shot / zip. Every other
-  // sound stays on the new sprites.
-  let wNoise = null;
-  function oldEnv(g, t, a, peak, d, rel = 0.05) {
-    g.gain.cancelScheduledValues(t); g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(peak, t + a);
-    g.gain.exponentialRampToValueAtTime(0.0001, t + a + d); g.gain.setValueAtTime(0, t + a + d + rel);
-  }
-  function oldOut(n, pan) { if (pan && ac.createStereoPanner) { const p = ac.createStereoPanner(); p.pan.value = pan; n = n.connect(p); } n.connect(bus.sfx); }
-  function oldNoise({ f, f2, q, dur, g, at = 0, pan = 0, a = 0.005 }) {
-    if (!wNoise) { const n = Math.floor(ac.sampleRate * 3); wNoise = ac.createBuffer(2, n, ac.sampleRate); for (let c = 0; c < 2; c++) { const d = wNoise.getChannelData(c); for (let i = 0; i < n; i++) d[i] = Math.random() * 2 - 1; } }
-    const t = now() + at, sN = ac.createBufferSource(); sN.buffer = wNoise;
-    const fl = ac.createBiquadFilter(); fl.type = 'bandpass'; fl.frequency.value = f; fl.Q.value = q; fl.frequency.exponentialRampToValueAtTime(f2, t + a + dur);
-    const gg = G(0); oldEnv(gg, t, a, g, dur); oldOut(sN.connect(fl).connect(gg), pan); sN.start(t, Math.random() * 2); sN.stop(t + a + dur + 0.1);
-  }
-  function oldTone({ f, f2, dur, g, pan = 0, a = 0.005 }) {
-    const t = now(), o = ac.createOscillator(); o.type = 'triangle'; o.frequency.setValueAtTime(f, t); o.frequency.exponentialRampToValueAtTime(f2, t + dur);
-    const gg = G(0); oldEnv(gg, t, a, g, dur); oldOut(o.connect(gg), pan); o.start(t); o.stop(t + a + dur + 0.1);
-  }
-  function oldThwip(strength = 1, pan = 0) {
-    if (!ready) return;
-    const p = (Math.random() - 0.5) * 0.3 + pan;
-    oldNoise({ f: 4200, f2: 1300, q: 2.2, dur: 0.09, g: 0.32 * strength, pan: p });
-    oldNoise({ f: 2400, f2: 700, q: 6, dur: 0.16, g: 0.12 * strength, at: 0.012, pan: p });
-    oldTone({ f: 1900 + Math.random() * 300, f2: 420, dur: 0.07, g: 0.07 * strength, pan: p });
-  }
-
+  // (user r-foley) the web shot / zip are foley sprites again (tools/audio/foley.py: shooter click, pressurised spurt,
+  // fibre crackle, strand flutter; the zip adds the line snapping taut and the tug on the suit). The zip sprite carries
+  // its own shot, so a thwip fired in the same moment (entering zip mode fires both) is faded out under it.
+  let lastThwip = null;
   const sfx = {
     // --- web / traversal
-    thwip(strength = 1, pan = 0) { oldThwip(strength, pan); }, // (user r-oldzip) old synth thwip
-    zip() { oldThwip(1.2); }, // (user r-oldzip) as before: zips play the thwip only
+    thwip(strength = 1, pan = 0) {
+      const v = play('thwip', { gain: clamp(strength, 0.35, 1.3), pan: clamp(pan + (Math.random() - 0.5) * 0.2, -1, 1), rate: 1.04 - 0.06 * clamp(strength, 0, 1.3) });
+      if (v) lastThwip = { v, t: now() };
+    },
+    zip() {
+      if (lastThwip && now() - lastThwip.t < 0.06) { try { lastThwip.v.g.gain.setTargetAtTime(0, now(), 0.01); } catch { /* ended */ } }
+      lastThwip = null; play('zip');
+    },
     attach(pan = 0) { play('attach', { pan }); },
     release(pan = 0) { play('release', { pan }); },
     slingCreak(t = 0.5, pan = 0) { const k = clamp(t, 0, 1); play('creak', { k: k * 3.4, gain: 0.45 + 0.6 * k, pan }); },
@@ -187,6 +176,11 @@ export function createAudio() {
     hurt(heavy = false) { play('hurt', { gain: heavy ? 1.1 : 0.8 }); if (heavy) duck(0.2, 0.4); },
     shot() { play('shot'); },
     slam() { play('slam'); duck(0.3, 0.5); },
+    // (user r-foley2) "an even softer swish when swinging, much much lower than the lowered effects": the air past him
+    // through the bottom of each swing arc, ~-12 dB under the (already x0.1) foley, a little louder with speed
+    swingSwish(speed = 20, pan = 0) { play('swingswish', { gain: clamp(speed / 30, 0.35, 1.0), pan: clamp(pan, -1, 1), rate: 0.94 + 0.12 * clamp(speed / 40, 0, 1) }); },
+    bodyfall(sev = 0.5) { play('bodyfall', { gain: 0.6 + 0.6 * clamp(sev, 0, 1) }); }, // a thug hitting the ground
+    clatter(kind = 'bin') { play('clatter_' + (kind === 'crate' || kind === 'drum' ? kind : 'bin')); }, // thrown prop landing
     // --- world
     horn(pan = 0, dist = 1) { play(Math.random() < 0.3 ? 'horn_big' : 'horn_small', { pan, gain: clamp(1.4 / Math.max(1, dist), 0.12, 1) }); },
     hornAt(x, y, z, big = false) { play(big ? 'horn_big' : 'horn_small', { pos: { x, y, z }, ref: 8 }); },
@@ -264,10 +258,10 @@ export function createAudio() {
   }
 
   function setVolumes(s) {
-    vol.master = s.masterVolume; vol.music = s.musicVolume ?? 0.6; vol.sfx = s.sfxVolume; vol.ambience = s.ambienceVolume; vol.ui = s.uiVolume;
+    vol.master = s.masterVolume ?? 1; vol.music = s.musicVolume ?? D; vol.sfx = s.sfxVolume ?? D; vol.ambience = s.ambienceVolume ?? D; vol.ui = s.uiVolume ?? D;
     if (!ready) return; const t = now();
-    master.gain.setTargetAtTime(vol.master, t, 0.05); bus.music.gain.setTargetAtTime(vol.music * MUSIC_K, t, 0.05); bus.sfx.gain.setTargetAtTime(vol.sfx, t, 0.05);
-    bus.ambience.gain.setTargetAtTime(vol.ambience, t, 0.05); bus.ui.gain.setTargetAtTime(vol.ui, t, 0.05);
+    master.gain.setTargetAtTime(vol.master, t, 0.05); bus.music.gain.setTargetAtTime(vol.music * TRIM.music, t, 0.05); bus.sfx.gain.setTargetAtTime(vol.sfx * TRIM.sfx, t, 0.05);
+    bus.ambience.gain.setTargetAtTime(vol.ambience * TRIM.ambience, t, 0.05); bus.ui.gain.setTargetAtTime(vol.ui * TRIM.ui, t, 0.05);
   }
   function setPaused(p) {
     paused = p; if (!ready) return;

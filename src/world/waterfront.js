@@ -1,3 +1,4 @@
+import { GrowBuffer } from './buffer.js';
 import { getQuality } from '../render/quality.js';
 import { assetUrl } from '../platform/assets.js';
 // OWNER: coast agent (coast r1). The whole waterfront edge: Manhattan's seawall all round the island and the near far
@@ -83,8 +84,8 @@ function farOwned() {
 export function farCoastOwns(name, i) { return farOwned().has(name + ':' + i); }
 
 // ------------------------------------------------------------------ geometry builder (one per cell and mesh)
-class CB {
-  constructor() { this.P = []; this.N = []; this.U = []; this.C = []; this.T = []; this.I = []; this.v = 0; }
+export class CB {
+  constructor() { for (const key of ['P', 'N', 'U', 'C', 'T', 'I']) this[key] = new GrowBuffer(key === 'I' ? Uint32Array : Float32Array); this.v = 0; }
   // convex planar polygon (3-4 pts [x,y,z]) with face normal n, per-vertex uv [[u,v],...], colour, tile
   poly(pts, n, uv, col, tile) {
     const b = this.v;
@@ -130,14 +131,14 @@ class CB {
   build() {
     if (!this.v) return null;
     const g = new THREE.BufferGeometry();
-    g.setAttribute('position', new THREE.Float32BufferAttribute(this.P, 3));
-    g.setAttribute('normal', new THREE.Float32BufferAttribute(this.N, 3));
-    g.setAttribute('uv', new THREE.Float32BufferAttribute(this.U, 2));
-    g.setAttribute('color', new THREE.Float32BufferAttribute(this.C, 3));
-    g.setAttribute('aTile', new THREE.Float32BufferAttribute(this.T, 1));
-    g.setIndex(this.v > 65535 ? new THREE.Uint32BufferAttribute(this.I, 1) : new THREE.Uint16BufferAttribute(this.I, 1));
+    g.setAttribute('position', new THREE.BufferAttribute(this.P.take(), 3));
+    g.setAttribute('normal', new THREE.BufferAttribute(this.N.take(), 3));
+    g.setAttribute('uv', new THREE.BufferAttribute(this.U.take(), 2));
+    g.setAttribute('color', new THREE.BufferAttribute(this.C.take(), 3));
+    g.setAttribute('aTile', new THREE.BufferAttribute(this.T.take(), 1));
+    g.setIndex(new THREE.BufferAttribute(this.I.take(this.v > 65535 ? Uint32Array : Uint16Array), 1));
     g.computeBoundingSphere(); g.computeBoundingBox();
-    if (getQuality().mobile) { this.P = this.N = this.U = this.C = this.T = this.I = []; this.v = 0; }
+    if (getQuality().mobile) { for (const key of ['P', 'N', 'U', 'C', 'T', 'I']) { this[key].a = new this[key].Type(0); this[key].length = 0; } this.v = 0; }
     return g;
   }
 }

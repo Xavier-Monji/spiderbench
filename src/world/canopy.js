@@ -1,3 +1,4 @@
+import { getQuality } from '../render/quality.js';
 // OWNER: foundation agent (city remake). Cheap distant tree canopies for the far shores (back yards, parks, street
 // rows, the Palisades woods): one InstancedMesh of lumpy low-poly blobs (20-tri icosahedra, per-instance squash and
 // tone), shaded darker underneath / inside so clumps read as foliage masses from the air, casting shadows.
@@ -30,7 +31,7 @@ export class CanopyBatch {
       this.add(x + Math.cos(a) * d, y, z + Math.sin(a) * d, rMin + this.rnd() * (rMax - rMin), autumn);
     }
   }
-  get count() { return this.M.length; }
+  get count() { return (this.releasedCount || 0) + this.M.length; }
   // opts.tile: split the instances into square tiles of this size (m) -> per-tile frustum / shadow-cascade culling;
   // opts.smallCasters: skip the far shadow cascades (render/csm.js). Returns the first mesh (all are added to scene).
   build(scene, name = 'canopy', castShadow = true, opts = {}) {
@@ -47,6 +48,7 @@ export class CanopyBatch {
         this._geo = sub._geo; this._mat = sub._mat;
         first ??= m;
       }
+      if (getQuality().mobile) { this.releasedCount = (this.releasedCount || 0) + this.M.length; this.M = []; this.C = []; }
       return first;
     }
     // (round 8) shape 'cone': conifers (pines / spruces) -- a lumpy 7-sided spire, so park woods mix silhouettes
@@ -107,6 +109,7 @@ export class CanopyBatch {
     mesh.castShadow = castShadow && !this.fade; mesh.receiveShadow = true; mesh.name = name; // (faded fills: the shadow pass would not shrink them)
     if (opts.smallCasters) mesh.userData.smallCasters = true;
     scene.add(mesh);
+    if (getQuality().mobile) { this.releasedCount = (this.releasedCount || 0) + this.M.length; this.M = []; this.C = []; }
     return mesh;
   }
 }

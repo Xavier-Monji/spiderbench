@@ -72,7 +72,15 @@ export class Solids {
 //           footprint and that were added in [start, end) are removed)
 //   solidBase columns reach down to the instance base (roof equipment: no crawl space under it) instead of the
 //           lowest rendered surface in the column
-export function fitInstancedSolids(S, pools, { spec, start = 0, end = S.count, cell = 0.025 } = {}) {
+export function fitInstancedSolids(...args) {
+  const it = fitInstancedSolidSteps(...args); let r; do { r = it.next(); } while (!r.done); return r.value;
+}
+export async function fitInstancedSolidsAsync(...args) {
+  const it = fitInstancedSolidSteps(...args); let r, t = performance.now();
+  do { r = it.next(); if (!r.done && performance.now() - t > 5) { await new Promise(resolve => setTimeout(resolve, 0)); t = performance.now(); } } while (!r.done);
+  return r.value;
+}
+function* fitInstancedSolidSteps(S, pools, { spec, start = 0, end = S.count, cell = 0.025 } = {}) {
   const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _p = new THREE.Vector3(), _s = new THREE.Vector3(), _e = new THREE.Euler();
   const Y = new THREE.Vector3(0, 1, 0), RQ = Math.PI / 360;
   let nInst = 0, nDead = 0;
@@ -100,6 +108,7 @@ export function fitInstancedSolids(S, pools, { spec, start = 0, end = S.count, c
     if (!nt) continue;
     const W = new Float32Array(nt * 9);
     for (const it of pool.items) {
+      yield;
       if (it.y < minY) continue;
       _p.set(0, 0, 0);
       const ry = Math.round(it.ry / RQ) * RQ; // 0.5 degree steps: < 5 mm at the rim of a 0.6 m dish, bounded field count

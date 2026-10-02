@@ -4,6 +4,7 @@ import { chromium } from 'playwright';
 import assert from 'node:assert/strict';
 import { readFile, mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
+import sharp from 'sharp';
 import { isStreamBufferAbort } from './cdn-media.mjs';
 const info = JSON.parse(await readFile('deployment/build-info.json', 'utf8'));
 const uri = (await readFile('deployment/launcher.data-uri.txt', 'utf8')).trim();
@@ -47,10 +48,22 @@ await page.addInitScript(() => { let ctx;
   HTMLMediaElement.prototype.play = function (...args) { window.__smokeMedia.add(this); return play.apply(this, args); };
   Object.defineProperty(window, '__ctx', { get: () => ctx, set: value => { ctx = value; ctx.manualStep = true; } });
 });
+// Check the game viewport, not just a visible HUD: a cleared/black WebGL canvas must fail the smoke test.
+async function captureGame(file, timeout) {
+  const image = await page.screenshot({ path: file, timeout });
+  const { width, height } = await sharp(image).metadata();
+  const { data, info } = await sharp(image).extract({ left: Math.floor(width * .38), top: Math.floor(height * .32),
+    width: Math.floor(width * .24), height: Math.floor(height * .23) }).removeAlpha().raw().toBuffer({ resolveWithObject: true });
+  let lit = 0;
+  for (let i = 0; i < data.length; i += info.channels) if (Math.max(data[i], data[i + 1], data[i + 2]) > 15) lit++;
+  const fraction = lit / (info.width * info.height);
+  assert.ok(fraction > .25, `Game canvas appears black (${fraction.toFixed(3)} lit fraction)`);
+  return fraction;
+}
 let stats;
 try {
   await page.goto(uri, { waitUntil: 'commit' });
-  await page.waitForFunction(() => window.__ctx?.stepFrame && __ctx.combat, null, { timeout: 150000 });
+  await page.waitForFunction(() => window.__ctx?.stepFrame && __ctx.combat, null, { timeout: 180000 });
   const cdp = await page.context().newCDPSession(page); await cdp.send('HeapProfiler.collectGarbage');
   stats = await page.evaluate(() => ({ origin: location.origin, base: document.baseURI, quality: __ctx.quality.name,
     persistentSave: __ctx.sys.save.persistent, heapBytes: performance.memory?.usedJSHeapSize,
@@ -69,7 +82,7 @@ try {
   console.log('Frames submitted:', JSON.stringify(stats.render));
   await page.waitForFunction(() => !document.querySelector('#boot'), null, { timeout: 10000 });
   await mkdir('artifacts', { recursive: true });
-  await page.screenshot({ path: 'artifacts/cdn-mobile-landscape.png', timeout: 120000 });
+  stats.landscapeLitFraction = await captureGame('artifacts/cdn-mobile-landscape.png', 120000);
   console.log('Landscape captured');
   stats.render = await page.evaluate(() => __ctx.pipeline.stats);
   // Route real Chromium multi-touch PointerEvents, rather than only synthetic dispatchEvent() fixtures.
@@ -89,6 +102,24 @@ try {
   assert.equal(await page.evaluate(() => __ctx.input.state.swing), false);
   assert.equal(await page.evaluate(() => !!document.pointerLockElement), false);
   stats.touch = controlled;
+  // The startup fix relies on actual eviction and replay, not just a lower initial counter. Keep physics/render
+  // paused during this synthetic trip; then return to the real spawn, where CPU data is restored from compressed
+  // chunks and GPU readiness remains progressive. Collision, map and input must still work after construction GC.
+  stats.eviction = await page.evaluate(async () => {
+    const stream = __ctx.world.streamer, before = stream.stats;
+    const bytes = before.recipeBytes;
+    stream.update(new __ctx.THREE.Vector3(10000, 0, 10000), 0);
+    const far = stream.stats;
+    await stream.prime(__ctx.world.spawn);
+    const returned = stream.stats;
+    return { before, far, returned, sameRecipes: returned.recipeBytes === bytes,
+      ground: __ctx.world.groundHeight(__ctx.world.spawn.x, __ctx.world.spawn.z),
+      map: !!__ctx.world.getMapFeatures() };
+  });
+  assert.equal(stats.eviction.far.residentBytes, 0); assert.equal(stats.eviction.far.ready, 0);
+  assert.ok(stats.eviction.returned.residentBytes > 0);
+  assert.ok(stats.eviction.returned.residentBytes <= stats.eviction.returned.maxResidentBytes);
+  assert.ok(stats.eviction.sameRecipes); assert.ok(Number.isFinite(stats.eviction.ground)); assert.ok(stats.eviction.map);
   await page.locator('[data-nav=map]').tap();
   assert.equal(await page.evaluate(() => __ctx.flow.mode), 'menu');
   assert.equal(await page.evaluate(() => __ctx.sys.pause.tab), 'map');
@@ -99,10 +130,15 @@ try {
   assert.equal(await page.evaluate(() => __ctx.flow.mode), 'play');
   await page.waitForFunction(() => getComputedStyle(document.querySelector('.sys-menu')).visibility === 'hidden');
   await page.setViewportSize({ width: 820, height: 1180 });
-  await page.evaluate(() => { __ctx.pipeline.render = window.originalRender; __ctx.stepFrame(1 / 30); });
+  await page.evaluate(async () => {
+    __ctx.pipeline.render = window.originalRender;
+    // Playwright's viewport change queues both window and visualViewport resize events. Drawing in the same
+    // task can precede a late resize which clears the canvas (the normal animation loop would draw again).
+    for (let i = 0; i < 3; i++) { await new Promise(resolve => requestAnimationFrame(resolve)); __ctx.stepFrame(1 / 30); }
+  });
   stats.portraitSize = await page.evaluate(() => __ctx.pipeline.size);
   assert.ok(stats.portraitSize.W * stats.portraitSize.H <= 1000000);
-  await page.screenshot({ path: 'artifacts/cdn-mobile-portrait.png', timeout: 90000 });
+  stats.portraitLitFraction = await captureGame('artifacts/cdn-mobile-portrait.png', 90000);
   // Validate the actual streamed elements, not just the request lifecycle: normal buffering/seek cancellations
   // are not broken audio. HTTP/CORS/decoder/network failures still fail this test.
   await page.waitForFunction(() => __ctx.sys.audio.state().stems.length === 4
@@ -116,7 +152,7 @@ try {
   assert.ok(responses.some(r => r.url === info.entry && r.status === 200));
   assert.ok(responses.some(r => /\.js$/.test(r.url) && r.status === 200));
   assert.ok(responses.some(r => /spiderman\.glb$/.test(r.url) && r.status === 200));
-  console.log('PASS: opaque-origin assets, shaders, touch movement/swing input, map/resume, portrait budget');
+  console.log('PASS: opaque-origin assets, shaders, touch movement/swing input, eviction/return, collision/map/resume, portrait budget');
 } finally {
   await mkdir('artifacts', { recursive: true });
   const boot = await page.evaluate(() => ({ label: document.querySelector('#boot .lbl')?.textContent,

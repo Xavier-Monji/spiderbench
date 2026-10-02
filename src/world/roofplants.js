@@ -1,3 +1,5 @@
+import { getQuality } from '../render/quality.js';
+import { GrowBuffer } from './buffer.js';
 import { assetUrl } from '../platform/assets.js';
 // OWNER: rooftops agent (veg r1). Roof-garden planting: instanced shrubs, perennials and ornamental grasses made of
 // alpha-cut cards textured with the image-generated foliage atlas (public/assets/city/tex/roofplants.webp, 2x2 tiles:
@@ -80,17 +82,34 @@ function plantMaterial(tex) {
   return mat;
 }
 
+// Compact read-only instance catalogue. Only visible plants are materialized as JS records for Pool.write().
+// Float64 retains the original coordinates, rotations, scales and tints; no plants are removed.
+export class PackedPlantItems {
+  constructor() { this.data = new GrowBuffer(Float64Array); }
+  add(x, y, z, ry, sx, sy, sz, tile, r, g, b) { this.data.push(x,y,z,ry,sx,sy,sz,tile,r,g,b); }
+  get length() { return this.data.length / 11; }
+  xAt(i) { return this.data.a[i * 11]; }
+  zAt(i) { return this.data.a[i * 11 + 2]; }
+  record(i) {
+    const a = this.data.a, j = i * 11;
+    return { x:a[j], y:a[j+1], z:a[j+2], ry:a[j+3], s:1, scale3:[a[j+4],a[j+5],a[j+6]], extra:{aPlant:[a[j+7],a[j+8],a[j+9],a[j+10]]} };
+  }
+  seal() { this.data.a = this.data.take(); }
+}
+
 export class RoofPlants {
-  constructor() { this.items = [[], []]; }
+  constructor() { this.items = getQuality().mobile ? [new PackedPlantItems(), new PackedPlantItems()] : [[], []]; }
   // add one plant: base (x, y, z), radius r (m), height hgt (m), species tile, tint [r,g,b]
   add(x, y, z, r, hgt, tile, tint, ry) {
     const grass = tile === PLANT.GRASS ? 1 : 0;
     const d = grass ? 1 : 0; // geometry default tile (shadow silhouette)
+    if (this.items[grass].record) { const sc = grass ? r * 2 : r; this.items[grass].add(x,y,z,ry,sc,hgt,sc,tile + 4 * d,...tint); return; }
     this.items[grass].push({ x, y, z, ry, s: 1, scale3: grass ? [r * 2, hgt, r * 2] : [r, hgt, r], extra: { aPlant: [tile + 4 * d, ...tint] } });
   }
   get count() { return this.items[0].length + this.items[1].length; }
   build(scene) {
     if (!this.count) return;
+    for (const items of this.items) items.seal?.();
     const tex = new THREE.TextureLoader().load(assetUrl('/assets/city/tex/roofplants.webp'));
     tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 4;
     const mat = plantMaterial(tex);

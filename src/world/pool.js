@@ -103,6 +103,7 @@ export class Pool {
     this.items.push(it);
     return it;
   }
+  itemAt(i) { return this.items.record ? this.items.record(i) : this.items[i]; }
   // write one instance
   // hide(it) / show(it): take one item out of the rendered set (e.g. picked up by combat); forces a repack
   hide(it) { it.hidden = true; this.last.set(1e9, 0, 0); this.written = -1; }
@@ -132,8 +133,9 @@ export class Pool {
     if (cached && cached.n === this.items.length && !this.dirty) { this.grid = cached.g; this.gridN = cached.n; return; }
     const C = 64, g = new Map();
     for (let i = 0; i < this.items.length; i++) {
-      const it = this.items[i];
-      const key = Math.floor(it.x / C) * 100003 + Math.floor(it.z / C);
+      const x = this.items.xAt ? this.items.xAt(i) : this.items[i].x;
+      const z = this.items.zAt ? this.items.zAt(i) : this.items[i].z;
+      const key = Math.floor(x / C) * 100003 + Math.floor(z / C);
       let a = g.get(key); if (!a) g.set(key, (a = [])); a.push(i);
     }
     this.grid = g; this.gridN = this.items.length; this.dirty = false;
@@ -156,7 +158,7 @@ export class Pool {
     if (this.isStatic) {
       if (this.written === this.items.length && !force && !this.dirty) return;
       const n = Math.min(this.max, this.items.length);
-      for (let k = 0; k < n; k++) this.write(k, this.items[k]);
+      for (let k = 0; k < n; k++) this.write(k, this.itemAt(k));
       this.mesh.count = n; this.nShadow = this.shadowFar >= this.far ? n : 0; this.written = this.items.length; this.dirty = false;
       this.mesh.visible = n > 0; // (perf) empty pools cost no draw call in the main / shadow passes
       this.upload(n);
@@ -181,8 +183,8 @@ export class Pool {
       const cell = this.grid.get(gx * 100003 + gz);
       if (!cell) continue;
       for (const i of cell) {
-        const it = items[i];
-        const dx = it.x - cam.x, dz = it.z - cam.z;
+        const x = items.xAt ? items.xAt(i) : items[i].x, z = items.zAt ? items.zAt(i) : items[i].z;
+        const dx = x - cam.x, dz = z - cam.z;
         const d2 = dx * dx + dz * dz;
         if (d2 >= n2 && d2 < f2 && (d2 < w2 || dx * wx + dz * wz >= wc * Math.sqrt(d2))) cand.push(i, d2);
       }
@@ -193,7 +195,7 @@ export class Pool {
       const idx = []; for (let i = 0; i < cand.length; i += 2) idx.push(i);
       idx.sort((a, b) => cand[a + 1] - cand[b + 1]);
       let ns = 0;
-      for (let j = 0; j < this.max; j++) { if (cand[idx[j] + 1] < s2) ns = j + 1; this.write(k++, items[cand[idx[j]]]); }
+      for (let j = 0; j < this.max; j++) { if (cand[idx[j] + 1] < s2) ns = j + 1; this.write(k++, this.itemAt(cand[idx[j]])); }
       this.nShadow = ns;
     } else if (Pool.sortF2B && cand.length / 2 <= Pool.sortMax) {
       // (perf r3) nearest first: the whole written set in front-to-back order (casters stay a prefix: they are the
@@ -205,13 +207,13 @@ export class Pool {
       let ns = 0;
       for (let j = 0; j < n; j++) { const d2 = cand[2 * j + 1], sh = d2 < s2; if (sh) ns++; key[j] = (Math.floor(d2) * 2 + (sh ? 0 : 1)) * 1048576 + j; }
       const ks = key.subarray(0, n).sort();
-      for (let j = 0; j < n; j++) this.write(k++, items[cand[2 * (ks[j] % 1048576)]]);
+      for (let j = 0; j < n; j++) this.write(k++, this.itemAt(cand[2 * (ks[j] % 1048576)]));
       this.nShadow = ns;
     } else {
       // shadow casters (within shadowFar) first, then the rest
-      for (let i = 0; i < cand.length; i += 2) if (cand[i + 1] < s2) this.write(k++, items[cand[i]]);
+      for (let i = 0; i < cand.length; i += 2) if (cand[i + 1] < s2) this.write(k++, this.itemAt(cand[i]));
       this.nShadow = k;
-      for (let i = 0; i < cand.length; i += 2) if (cand[i + 1] >= s2) this.write(k++, items[cand[i]]);
+      for (let i = 0; i < cand.length; i += 2) if (cand[i + 1] >= s2) this.write(k++, this.itemAt(cand[i]));
     }
     this.mesh.count = k;
     this.mesh.visible = k > 0; // (perf) empty pools: no zero-instance draw in the main pass + every cascade

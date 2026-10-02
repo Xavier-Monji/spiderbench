@@ -1,3 +1,4 @@
+import { GrowBuffer } from './buffer.js';
 import { getQuality } from '../render/quality.js';
 import { assetUrl } from '../platform/assets.js';
 // OWNER: billboards agent. City-wide signage outside Times Square, attached procedurally per building lot + face, so it
@@ -67,25 +68,23 @@ const BLADE_OK = [2, 11, 12, 13, 15, 19, 24, 32, 36, 41, 44, 45, 46, 51, 52, 56,
 
 // ------------------------------------------------------------------------------------------------ batch
 // kind (aSig.x): 0 plain steel (vertex colour), 1 printed vinyl, 2 painted wall ad, 3 LED screen, 4 lit sign, 5 ghost, 6 bulbs
-class SB {
-  constructor() { this.p = []; this.n = []; this.uv = []; this.c = []; this.s = []; this.l = []; this.i = []; this.v = 0; }
+export class SB {
+  constructor() { for (const key of ['p','n','uv','c','s','l','i']) this[key] = new GrowBuffer(key === 'i' ? Uint32Array : Float32Array); this.v = 0; }
   quad(P4, n, uv, col, kind, gain) {
     for (const q of P4) { this.p.push(q[0], q[1], q[2]); this.n.push(n[0], n[1], n[2]); this.c.push(col[0], col[1], col[2]); this.s.push(kind, gain); }
     if (uv) this.uv.push(uv[0], uv[1], uv[2], uv[1], uv[2], uv[3], uv[0], uv[3]); else this.uv.push(0, 0, 0, 0, 0, 0, 0, 0);
     this.l.push(0, 0, 1, 0, 1, 1, 0, 1); // (r3) quad-local 0..1 (edge wear, ghost fade, awning stripes)
     this.i.push(this.v, this.v + 1, this.v + 2, this.v, this.v + 2, this.v + 3); this.v += 4;
   }
-  build() {
+  build({ consume = false } = {}) {
     if (!this.v) return null;
     const g = new THREE.BufferGeometry();
-    g.setAttribute('position', new THREE.Float32BufferAttribute(this.p, 3));
-    g.setAttribute('normal', new THREE.Float32BufferAttribute(this.n, 3));
-    g.setAttribute('uv', new THREE.Float32BufferAttribute(this.uv, 2));
-    g.setAttribute('color', new THREE.Float32BufferAttribute(this.c, 3));
-    g.setAttribute('aSig', new THREE.Float32BufferAttribute(this.s, 2));
-    g.setAttribute('aLoc', new THREE.Float32BufferAttribute(this.l, 2));
-    g.setIndex(this.v > 65535 ? new THREE.Uint32BufferAttribute(this.i, 1) : new THREE.Uint16BufferAttribute(this.i, 1));
+    for (const [name, key, size] of [['position','p',3],['normal','n',3],['uv','uv',2],['color','c',3],['aSig','s',2],['aLoc','l',2]]) {
+      g.setAttribute(name, new THREE.BufferAttribute(this[key].take(), size));
+    }
+    g.setIndex(new THREE.BufferAttribute(this.i.take(this.v > 65535 ? Uint32Array : Uint16Array), 1));
     g.computeBoundingSphere(); g.computeBoundingBox();
+    if (consume) { for (const key of ['p','n','uv','c','s','l','i']) { this[key].a = new this[key].Type(0); this[key].length = 0; } this.v = 0; }
     return g;
   }
 }
@@ -808,6 +807,7 @@ export function buildSignage({ scene, gen }) {
     }
     if (e.op || e.gh) list.push(e);
   }
+  if (getQuality().mobile) { cells.clear(); occ.clear(); fps.clear(); blds.length = 0; }
   stats.meshes = list.reduce((a, e) => a + !!e.op + !!e.gh, 0);
   console.log(`[signage] ${stats.roof} rooftop billboards (+${stats.roofPanel ?? 0} roof-kit ad faces), ${stats.front ?? 0} shop fascias, ${stats.marquee ?? 0} marquees, ${stats.wall} wall ads, ${stats.ghost} ghost signs, ${stats.blade} blade signs, ${stats.led} LED screens, ${stats.awning ?? 0} awnings, ${stats.canopy ?? 0} canopies, ${stats.letters ?? 0} lobby letters, ${stats.winLetters ?? 0} window letterings, ${stats.flag ?? 0} flags | ${list.length} cells, ${stats.meshes} meshes, ${(stats.tris / 1000).toFixed(1)}k tris`);
   if (Q.has('signdbg')) { const [qx, qz, qr] = (Q.get('signdbg') || '0,0,900').split(',').map(Number); for (const k in stats.at) console.log('[signage-at] ' + k + ' ' + JSON.stringify(stats.at[k].filter(p => Math.hypot(p[0] - qx, p[2] - qz) < qr).slice(0, 40))); }

@@ -1,3 +1,4 @@
+import { GrowBuffer } from './buffer.js';
 import { getQuality } from '../render/quality.js';
 // OWNER: city agent. Streets (asphalt shader w/ lane grime), sidewalks + curbs, road markings, park ground, water.
 import * as THREE from 'three';
@@ -291,7 +292,7 @@ export function createSidewalkMaterial(T) {
 // rects: {x0,z0,x1,z1, y0?} axis-aligned curb boxes, or {poly:[[x,z],...] convex, shore:[bool per edge], rect?} promenade
 // pieces (top + curb faces on the inland edges; shore edges get the seawall from buildGround)
 function sidewalkGeometry(rects) {
-  const P = [], N = [], R = [], I = [];
+  const P = new GrowBuffer(), N = new GrowBuffer(), R = new GrowBuffer(), I = new GrowBuffer(Uint32Array);
   let v = 0;
   const h = G.CURB_H;
   const quad = (pts, n, r) => {
@@ -336,10 +337,10 @@ function sidewalkGeometry(rects) {
     quad([[x0, y0, z0], [x0, y0, z1], [x0, h, z1], [x0, h, z0]], [-1, 0, 0], rr);
   }
   const g = new THREE.BufferGeometry();
-  g.setAttribute('position', new THREE.Float32BufferAttribute(P, 3));
-  g.setAttribute('normal', new THREE.Float32BufferAttribute(N, 3));
-  g.setAttribute('aRect', new THREE.Float32BufferAttribute(R, 4));
-  g.setIndex(new THREE.Uint32BufferAttribute(I, 1));
+  g.setAttribute('position', new THREE.BufferAttribute(P.take(), 3));
+  g.setAttribute('normal', new THREE.BufferAttribute(N.take(), 3));
+  g.setAttribute('aRect', new THREE.BufferAttribute(R.take(), 4));
+  g.setIndex(new THREE.BufferAttribute(I.take(), 1));
   g.computeBoundingSphere();
   return g;
 }
@@ -436,8 +437,8 @@ export function fillPieces(blocks) {
 }
 
 // ------------------------------------------------------------------ road markings (decals)
-class DecalBuilder {
-  constructor(rects) { this.R = rects; this.P = []; this.UV = []; this.C = []; this.I = []; this.v = 0; }
+export class DecalBuilder {
+  constructor(rects) { this.R = rects; this.P = new GrowBuffer(); this.UV = new GrowBuffer(); this.C = new GrowBuffer(); this.I = new GrowBuffer(Uint32Array); this.v = 0; }
   // axis-aligned decal centred at (x,z), size sx (x) by sz (z), `rot` = 0: texture v runs along -z (north), 1: along +x, 2: +z, 3: -x
   add(name, x, z, sx, sz, rot = 0, color = [1, 1, 1], y = 0.012) {
     const [u0, v0, du, dv] = this.R[name];
@@ -459,13 +460,15 @@ class DecalBuilder {
   }
   build() {
     const g = new THREE.BufferGeometry();
-    g.setAttribute('position', new THREE.Float32BufferAttribute(this.P, 3));
-    g.setAttribute('normal', new THREE.Float32BufferAttribute(new Array(this.v).fill(0).flatMap(() => [0, 1, 0]), 3));
-    g.setAttribute('uv', new THREE.Float32BufferAttribute(this.UV, 2));
-    g.setAttribute('color', new THREE.Float32BufferAttribute(this.C, 3));
-    g.setIndex(new THREE.Uint32BufferAttribute(this.I, 1));
+    g.setAttribute('position', new THREE.BufferAttribute(this.P.take(), 3));
+    const normals = new Float32Array(this.v * 3);
+    for (let i = 1; i < normals.length; i += 3) normals[i] = 1;
+    g.setAttribute('normal', new THREE.BufferAttribute(normals, 3));
+    g.setAttribute('uv', new THREE.BufferAttribute(this.UV.take(), 2));
+    g.setAttribute('color', new THREE.BufferAttribute(this.C.take(), 3));
+    g.setIndex(new THREE.BufferAttribute(this.I.take(), 1));
     g.computeBoundingSphere();
-    if (getQuality().mobile) { this.P = this.UV = this.C = this.I = []; this.v = 0; }
+    if (getQuality().mobile) { for (const key of ['P', 'UV', 'C', 'I']) { this[key].a = new this[key].Type(0); this[key].length = 0; } this.v = 0; }
     return g;
   }
 }
@@ -881,7 +884,7 @@ function parkPaths(rnd) {
 }
 
 function ribbon(paths, y0) {
-  const P = [], N = [], UV = [], I = [];
+  const P = new GrowBuffer(), N = new GrowBuffer(), UV = new GrowBuffer(), I = new GrowBuffer(Uint32Array);
   let v = 0;
   paths.forEach(({ pts, w, drive }, pi) => {
     // every ribbon gets its own height (1 mm apart) so crossings never produce coplanar overlapping faces
@@ -902,10 +905,10 @@ function ribbon(paths, y0) {
     }
   });
   const g = new THREE.BufferGeometry();
-  g.setAttribute('position', new THREE.Float32BufferAttribute(P, 3));
-  g.setAttribute('normal', new THREE.Float32BufferAttribute(N, 3));
-  g.setAttribute('uv', new THREE.Float32BufferAttribute(UV, 2));
-  g.setIndex(new THREE.Uint32BufferAttribute(I, 1));
+  g.setAttribute('position', new THREE.BufferAttribute(P.take(), 3));
+  g.setAttribute('normal', new THREE.BufferAttribute(N.take(), 3));
+  g.setAttribute('uv', new THREE.BufferAttribute(UV.take(), 2));
+  g.setIndex(new THREE.BufferAttribute(I.take(), 1));
   g.computeBoundingSphere();
   return g;
 }
@@ -928,7 +931,7 @@ export function buildGround({ scene, T, blocks, facadeMat, solids = null, zips =
   const asphalt = createAsphaltMaterial(T);
   // ---- asphalt: one quad per active road rect (avenue segments, street segments, intersections)
   {
-    const P = [], N = [], A = [], I = [];
+    const P = new GrowBuffer(), N = new GrowBuffer(), A = new GrowBuffer(), I = new GrowBuffer(Uint32Array);
     let v = 0;
     for (const r of roadRects()) {
       const kind = r.kind === 'avenue' ? 0 : r.kind === 'street' ? 1 + (r.hw - G.ST_HALF) * 0.01 : 2; // (layout2 r9) street half width folded into the kind (shader: sh)
@@ -978,10 +981,10 @@ export function buildGround({ scene, T, blocks, facadeMat, solids = null, zips =
       I.push(v, v + 2, v + 1, v, v + 3, v + 2); v += 4;
     }
     const g = new THREE.BufferGeometry();
-    g.setAttribute('position', new THREE.Float32BufferAttribute(P, 3));
-    g.setAttribute('normal', new THREE.Float32BufferAttribute(N, 3));
-    g.setAttribute('aRoad', new THREE.Float32BufferAttribute(A, 3));
-    g.setIndex(new THREE.Uint32BufferAttribute(I, 1));
+    g.setAttribute('position', new THREE.BufferAttribute(P.take(), 3));
+    g.setAttribute('normal', new THREE.BufferAttribute(N.take(), 3));
+    g.setAttribute('aRoad', new THREE.BufferAttribute(A.take(), 3));
+    g.setIndex(new THREE.BufferAttribute(I.take(), 1));
     g.computeBoundingSphere();
     const am = new THREE.Mesh(g, asphalt);
     am.receiveShadow = true; am.name = 'asphalt';

@@ -20,9 +20,9 @@ import { timesSquareReserves, buildTimesSquare, tsTrimTrees } from './timessq.js
 import { loadCityTextures } from './textures.js';
 import { createFacadeMaterial, STYLE, LAYER } from './facade.js';
 import { buildHero } from './hero.js';
-import { generateBuildings, createDetailMaterial, dressSquares } from './buildings.js'; // (layout2 r4) dressSquares
+import { generateBuildings, generateBuildingsAsync, createDetailMaterial, dressSquares } from './buildings.js'; // (layout2 r4) dressSquares
 import { buildGround, terrainHeight, PIERS } from './ground.js';
-import { CollisionGrid, makeQueries, collisionDebugLines, fitInstancedSolids } from './collision.js';
+import { CollisionGrid, makeQueries, collisionDebugLines, fitInstancedSolids, fitInstancedSolidsAsync } from './collision.js';
 import { addPropAnchors, createGeoDebug } from './zippoints.js';
 import { buildProps } from './props.js';
 import { buildTrees, meadowDist } from './trees.js';
@@ -48,8 +48,24 @@ export async function buildCity({ scene, renderer }) {
   applyDistanceFade(detailMat, Q.mobile ? 180 : 320, detailFar);
   if (Q.mobile) applyDistanceFade(facadeMat, 2000, Q.worldFar); // citylife: small facade details dissolve 320-450 m; tiles hidden beyond (no pop)
 
+  let root = null;
+  const packed = new WeakMap();
+  // Pack completed static batches at each stage, not after ALL city/prop/collision builders have peaked.
+  // The shared-attribute cache preserves super-tile sharing; coordinates, UVs and indices remain exact.
+  const packStatic = async () => {
+    if (!Q.mobile || !root) return;
+    const geoms = new Set();
+    root.traverse(m => { if (m.geometry && !m.geometry.userData.streaming && !m.isSkinnedMesh && !m.userData.dynamic) geoms.add(m.geometry); });
+    let sliceStart = performance.now();
+    for (const g of geoms) {
+      compactGeometry(g, packed);
+      if (performance.now() - sliceStart > 5) { await new Promise(resolve => setTimeout(resolve, 0)); sliceStart = performance.now(); }
+    }
+    await new Promise(resolve => setTimeout(resolve, 0));
+  };
   const memlog = new URLSearchParams(location.search).has('memlog');
   const TT = [], tick = async (n, next) => {
+    await packStatic();
     TT.push(n + ' ' + (performance.now() - t0).toFixed(0));
     if (memlog) console.log('[city:stage]', n, performance.memory?.usedJSHeapSize);
     if (next) await boot?.stage(next);
@@ -58,7 +74,7 @@ export async function buildCity({ scene, renderer }) {
   const blocks = buildBlocks();
   // hero tower for the `wall` shot (ref 2) on the park-facing block east of the avenue at x=250
   const HERO_RECT = { x0: 266, z0: -620, x1: 300, z1: -580 };
-  const gen = generateBuildings(blocks, 1234, {
+  const gen = await (Q.mobile ? generateBuildingsAsync : generateBuildings)(blocks, 1234, {
     exclude: [HERO_RECT, ...approachRects()], // foundation: Manhattan bridge approach viaducts keep their lots empty
     reserve: [...landmarkReserves().filter(r => !/^ts[A-Z]/.test(r.name)), ...timesSquareReserves(), ...lincolnReserves()], // timessq: Times Square lives in timessq.js; (layout2 r5) Lincoln Center
     force: [
@@ -74,7 +90,7 @@ export async function buildCity({ scene, renderer }) {
   await tick('gen', 'build');
   const sqd = dressSquares(gen, blocks); console.log('[city] (layout2 r4) square dressing', JSON.stringify(sqd)); // Broadway bow-tie plazas
   const heroRect = gen.excluded[0] ? { ...gen.excluded[0], x0: HERO_RECT.x0 } : HERO_RECT;
-  const root = new THREE.Group(); root.name = 'city';
+  root = new THREE.Group(); root.name = 'city';
   scene.add(root);
   buildStandalone({ scene: root, gen, T }); // citygeo: Grand Central, Times-Square screens (writes into the tile builders)
   buildTimesSquare({ scene: root, gen }); // timessq: screens, plazas, TKTS steps, One-Times-Square tower (writes into the tile builders)
@@ -94,6 +110,7 @@ export async function buildCity({ scene, renderer }) {
     // (street r3) release the builders' JS number arrays as each tile is converted to typed arrays: the renderer hit the
     // V8 heap limit here ('V8 javascript OOM (CALL_AND_RETRY_LAST)' at ~3.3 GB, every page crashed after [rooftops])
     t.fac = t.lod = t.det = null;
+    if (Q.mobile) await new Promise(resolve => setTimeout(resolve, 0));
   }
   const ctr = tileMeshes.map(t => [t.cx, t.cz]);
   const facB = batchTiles(facG, facadeMat, 'facade', { castShadow: true, receiveShadow: true, merge: false }, ctr); // (perf) big: per tile
@@ -174,6 +191,13 @@ export async function buildCity({ scene, renderer }) {
   const traffic = buildTraffic({ scene: root, phase: props.phase, models: vehModels });
   const peds = await buildPeds({ scene: root, blocks, parkPaths: ground.parkPaths, props, traffic }); // citylife
   const flags = buildFlags({ scene: root, flags: gen.buildings.flags });
+  const spawn = new THREE.Vector3(250, 0, 160 + G.ST_HALF + 2.3); // on the centre line, in the south crosswalk
+  const viewpoints = makeViewpoints(gen, spawn, hero);
+  const mapData = mapFeatures(blocks, gen);
+  if (Q.mobile) {
+    delete globalThis.__roofAt;
+    gen.buildings = []; gen.polyBuildings = []; gen.roofSignPanels = [];
+  }
   await tick('life', 'coll');
   let time = 0;
   let _fr = null, _pm = null, _sp = null; // (perf r2) tile pre-upload frustum
@@ -185,7 +209,7 @@ export async function buildCity({ scene, renderer }) {
   // citygeo: exact collision for instanced rooftop props (replaces their coarse boxes; C4)
   const tFit = performance.now();
   const roofEq = { minY: 3, solidBase: true };
-  const fit = fitInstancedSolids(gen.solids, props.pools ?? [], { start: nSolidsPre, cell: Q.collisionCell ?? 0.025, spec: {
+  const fit = await (Q.mobile ? fitInstancedSolidsAsync : fitInstancedSolids)(gen.solids, props.pools ?? [], { start: nSolidsPre, cell: Q.collisionCell ?? 0.025, spec: {
     hvac: roofEq, vents: roofEq, garden: roofEq, dish: { minY: 3 }, antenna: { minY: 3, kind: 'antenna' },
     lamp: { yCut: 8.3, keepOld: true, kind: 'pole' },     // cobra head + arm above the pole cylinder (zip lampTop)
     mast: { yCut: 6.2, keepOld: true, kind: 'pole' },     // signal arm, heads, street-name blades (zip signalMast)
@@ -205,18 +229,10 @@ export async function buildCity({ scene, renderer }) {
   const geoDebug = createGeoDebug(root, grid, zips, collisionDebugLines);
   await tick('coll');
 
-  const spawn = new THREE.Vector3(250, 0, 160 + G.ST_HALF + 2.3); // on the centre line, in the south crosswalk
-  if (Q.mobile) {
-    const packed = new WeakMap(), seen = new Set();
-    root.traverse(m => { if (m.geometry && !m.geometry.userData.streaming && !m.isSkinnedMesh && !m.userData.dynamic && !seen.has(m.geometry)) {
-      seen.add(m.geometry); compactGeometry(m.geometry, packed);
-    } });
-  }
-  const streamer = Q.mobile ? createGeometryStreamer(root) : null;
-  if (streamer) { await boot?.stage('shaders'); await streamer.prime(spawn);
+  const streamer = Q.mobile ? createGeometryStreamer(root, { maxResidentBytes: Q.streamResidentBytes }) : null;
+  if (streamer) { await boot?.stage('shaders'); await streamer.prime(spawn, { maxBytes: Q.streamBootBytes, maxTiles: Q.streamBootTiles });
     // Keep nearby building silhouettes casting, but avoid shadowing millions of sub-pixel roof/prop triangles.
     root.traverse(m => { if (m.userData.smallCasters || /^(roofs |detail |roofplants|farCityRoofs)/.test(m.name)) m.castShadow = false; }); }
-  const viewpoints = makeViewpoints(gen, spawn, hero);
 
   const params = new URLSearchParams(location.search);
   const camParam = params.get('cam');
@@ -235,7 +251,7 @@ export async function buildCity({ scene, renderer }) {
     collision: grid, geoDebug,
     buildings: gen.boxes,
     footprints: gen.footprints,
-    getMapFeatures: () => mapFeatures(blocks, gen),
+    getMapFeatures: () => mapData,
     textures: T,
     materials: { facade: facadeMat },
     update(dt, camera) {
@@ -302,6 +318,13 @@ export async function buildCity({ scene, renderer }) {
   attachLife(world, { traffic, crowd: peds.crowd, pigeons: peds.pigeons }); // citylife: C3 hooks + world.life
   console.log(`[city] built in ${(performance.now() - t0).toFixed(0)} ms: ${gen.boxes.length} boxes, ${grid.n} solids, ${zips.count} zip points, rooftop refit ${fit.nInst} inst/${fit.nBox} fields/${(fit.cells / 1e6).toFixed(2)}M cells/-${fit.nDead} in ${(tFit2 - tFit).toFixed(0)} ms, ${gen.footprints.length} buildings, ${gen.tiles.size} tiles, ${far.count} far-shore boxes (${far.near} near, ${far.trees} trees), ${bridges.spans.length} bridges | ${TT.join(', ')}`);
   world.streamer = streamer;
+  if (Q.mobile) {
+    // Runtime collision, zip queries, map footprints and silhouettes already own their data. The builder closures
+    // and per-building roof/architecture metadata are construction-only (including the debug __roofAt probe).
+    delete globalThis.__roofAt;
+    gen.tiles.clear(); gen.tile = null; gen.buildings = []; gen.polyBuildings = [];
+    gen.roofSignPanels = []; gen.solids = null; gen.zips = null;
+  }
   return world;
 }
 

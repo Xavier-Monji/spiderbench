@@ -588,7 +588,9 @@ export async function buildRooftops({ scene, gen, facadeMat, T, renderer, extraR
     masses: [{ x0: rect.x0, z0: rect.z0, x1: rect.x1, z1: rect.z1, y0: 0, y1: H, parapet: 0,
       p: { floorH: 4, bayW: 1.55, winW: 0.97, winH: 0.74, layer: LAYER.CONCRETE, base: LAYER.GRANITE, seed: 42, margin: 0, depth: 0.04, tint: [1, 1, 1], style: STYLE.BLANK } }],
   }));
+  let sliceStart = performance.now();
   for (const bld of [...gen.buildings, ...extra]) {
+    if (Q.mobile && performance.now() - sliceStart > 5) { await new Promise(resolve => setTimeout(resolve, 0)); sliceStart = performance.now(); }
     const A = bld.A, masses = bld.masses;
     if (!masses?.length) continue;
     bld.roofKit = true; // props.js: this roof is dressed here (it then skips its generic HVAC / garden stamps)
@@ -2235,6 +2237,7 @@ export async function buildRooftops({ scene, gen, facadeMat, T, renderer, extraR
     t.rb = t.ao = t.sk = null; // free the builders
     if (skG[i]) st.streakTris = (st.streakTris ?? 0) + skG[i].index.count / 3;
     meshes.push({ i, ao: !!aoG[i], sk: !!skG[i], cx: t.cx, cz: t.cz, near: true });
+    if (Q.mobile) await new Promise(resolve => setTimeout(resolve, 0));
   }
   const ctr = meshes.map(t => [t.cx, t.cz]);
   const rbB = batchTiles(rbG, mat, 'roofs', { castShadow: true, receiveShadow: true, smallCasters: true, merge: false }, ctr); // csm: keep out of the far cascades

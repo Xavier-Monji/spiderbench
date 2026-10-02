@@ -96,7 +96,7 @@ const warmup = !shotName && !params.has('nowarm') ? createWarmup(renderer, scene
 if (warmup) {
   lighting.update(camera); pipeline.prepareMaterials?.(); warmup.rescan();
   if (quality.mobile) { // yield between small compile batches instead of one large synchronous flush
-    while (warmup.pending) { warmup.step(true); await new Promise(r => setTimeout(r, 0)); }
+    while (warmup.pending) { warmup.step(); await new Promise(r => setTimeout(r, 16)); }
   } else warmup.flush();
   await warmup.settle(k => boot.sub(k));
 }

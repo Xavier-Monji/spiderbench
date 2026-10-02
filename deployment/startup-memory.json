@@ -1,0 +1,89 @@
+{
+  "measuredOn": "2026-10-02",
+  "environment": {
+    "engine": "Chromium 153",
+    "gpu": "SwiftShader (software)",
+    "viewport": {
+      "width": 1180,
+      "height": 820,
+      "deviceScaleFactor": 2,
+      "touch": true
+    },
+    "profile": "mobile",
+    "manualStepping": true,
+    "preciseMemoryInfo": true,
+    "finalSampleAfterCDPGarbageCollection": true
+  },
+  "baseline": {
+    "sourceCommit": "fb2c2993da42cbdfd4ffdeeda3aa70be9a62b420",
+    "observedPeakBytes": 1707947192,
+    "finalHeapBytes": 1419976611,
+    "recipeBytes": 190278995,
+    "residentGeometryBytes": 252664116,
+    "readyTiles": 81
+  },
+  "updatedDevelopmentBuild": {
+    "observedPeakBytes": 1048508039,
+    "finalHeapBytes": 811947350,
+    "cdpUsedJSBytes": 156186548,
+    "cdpBackingStorageBytes": 653614162,
+    "uniqueSceneGeometryBytes": 338329365,
+    "recipeBytes": 92312493,
+    "residentGeometryBytes": 27775222,
+    "residentCapBytes": 67108864,
+    "readyTiles": 5,
+    "tiles": 926,
+    "collisionSolids": 1158557,
+    "collisionFields": 2670,
+    "bootMilliseconds": 76448.5,
+    "errors": []
+  },
+  "constrainedChromiumTest": {
+    "oldSpaceLimitMiB": 384,
+    "completed": true,
+    "observedPeakBytes": 884856188,
+    "finalHeapBytes": 805879767,
+    "readyTiles": 4,
+    "bootMilliseconds": 88825.6,
+    "errors": [],
+    "note": "This is a V8 old-space limit, not a total RAM limit or Safari emulation. Earlier intermediate implementations failed an artificial 256 MiB old-space test; the final implementation is not certified under that limit."
+  },
+  "updatedMockedProductionLaunch": {
+    "mode": "mocked",
+    "finalHeapBytes": 752103046,
+    "nativeBufferSize": {
+      "width": 1199,
+      "height": 833
+    },
+    "recipeBytes": 92312493,
+    "residentGeometryBytes": 27775222,
+    "requests": 81,
+    "errors": [],
+    "failedAssets": [],
+    "touch": {
+      "movement": {
+        "x": 0.8,
+        "y": 0.6
+      },
+      "mode": "swing",
+      "webActive": true
+    },
+    "evictionAndReturn": {
+      "beforeResidentBytes": 27775222,
+      "farResidentBytes": 0,
+      "returnedResidentBytes": 27775222,
+      "recipeBytesUnchanged": true,
+      "collisionAndMapAvailable": true
+    },
+    "landscapeLitFraction": 0.9620024181983485,
+    "portraitLitFraction": 1
+  },
+  "measurementCaveat": "These are sampled Chromium JavaScript/backing-store measurements, not total browser-process RAM or GPU memory. Samples can miss a transient peak and vary with GC timing. Software captures use a reduced rendering scale. They do not certify physical iPad 10/A14/Safari startup stability, 30 fps or endurance. The iPad-reported loading crash requires hardware retesting of the newly published artifact.",
+  "reproduce": [
+    "npm run dev",
+    "npm run profile:startup",
+    "PROFILE_HEAP_MB=384 PROFILE_OUTPUT=artifacts/startup-memory-384m.json npm run profile:startup",
+    "npm run build:cdn",
+    "npm run test:cdn"
+  ]
+}

@@ -33,7 +33,16 @@ function tintJitter(rnd, base, amt = 0.08) {
 
 // opts.exclude: [{x0,z0,x1,z1}] lots touching these are left empty (hero buildings); union returned in `excluded`
 // opts.force: [{x, z, arch(rnd, lot) -> partial archetype}] overrides the archetype of the lot containing (x,z)
-export function generateBuildings(blocks, seed = 1234, opts = {}) {
+// Keep the synchronous API for desktop/tools; mobile yields between blocks so Safari can collect temporary data.
+export function generateBuildings(...args) {
+  const it = generateBuildingSteps(...args); let r; do { r = it.next(); } while (!r.done); return r.value;
+}
+export async function generateBuildingsAsync(...args) {
+  const it = generateBuildingSteps(...args); let r, t = performance.now();
+  do { r = it.next(); if (!r.done && performance.now() - t > 5) { await new Promise(resolve => setTimeout(resolve, 0)); t = performance.now(); } } while (!r.done);
+  return r.value;
+}
+function* generateBuildingSteps(blocks, seed = 1234, opts = {}) {
   const rnd = mulberry32(seed);
   const tiles = new Map();
   const ctx = {
@@ -60,6 +69,7 @@ export function generateBuildings(blocks, seed = 1234, opts = {}) {
   const excluded = (opts.exclude || []).map(() => null);
   const reserves = (opts.reserve || []).map(r => ({ ...r, lot: null }));
   for (const b of blocks) {
+    yield;
     const bStart = ctx.buildings.length; // (layout2 r2) rect buildings of this block (frontage height caps)
     const flat = b.diag?.length ? flatironPoly(b) : null; // (layout2 r2) Flatiron wedge site
     const halves = b.split ? [{ ...b, pz1: b.split }, { ...b, pz0: b.split }] : [b];
@@ -183,7 +193,7 @@ export function generateBuildings(blocks, seed = 1234, opts = {}) {
       R.extra?.(lot, bld, { S: ctx.S, Z: ctx.Z, tile: tile(lot.cx, lot.cz) });
     }
   }
-  const vmapStats = vmapBuildings(ctx, tile, placedMid, opts, reserves); // (layout2 r2) Village street map (+ r4 FiDi map: reserves / exclude)
+  const vmapStats = yield* vmapBuildings(ctx, tile, placedMid, opts, reserves); // (layout2 r2) Village street map (+ r4 FiDi map: reserves / exclude)
   return { tiles, boxes: ctx.boxes, footprints: ctx.footprints, buildings: ctx.buildings, excluded, reserves, solids: ctx.S, zips: ctx.Z, tile, diagLots, vmap: vmapStats, frontPolys: ctx.frontPolys ?? [], polyBuildings: ctx.polyBuildings ?? [], frontage: { n: ctx.frontage || 0, solids: ctx.frontSolids || 0 }, openSpaces: ctx.open ?? [], openTrees: ctx.openTrees ?? [], variety: ctx.bvStats, diagR7: ctx.diagR7 }; // (layout2 r2) frontage stats; (layout2 r3) open spaces + their tree spots
 }
 
@@ -347,10 +357,11 @@ function prismBuilding(ctx, tile, P, A, H, r, front, isFlat) {
 // cells), each half into lots fronting the cross street: the interior lots are axis-aligned rects (the full generator:
 // cornices, fire escapes, rooftop kits, signage) and the two end lots on the angled streets are true-footprint prisms
 // (wedges / trapezoids, collision via polySolids <= 1.8 cm). Tiny cells stay paved plazas (trees: city.js).
-function vmapBuildings(ctx, tile, placedMid, opts = {}, reserves = []) {
+function* vmapBuildings(ctx, tile, placedMid, opts = {}, reserves = []) {
   let nRect = 0, nPrism = 0;
   const hitEx = (x0, z0, x1, z1) => (opts.exclude || []).some(e => x1 > e.x0 && x0 < e.x1 && z1 > e.z0 && z0 < e.z1); // (layout2 r4) bridge approaches
   for (const c of MAPS.flatMap(M => M.cells)) { // (layout2 r4) every street map
+    yield;
     const P0 = c.prop; if (!P0 || polyArea(P0) < 160 || c.park) continue; // (layout2 r4) park cells: lawns (ground.js)
     const b = c.block, hs = (x, z, k) => mulberry32(((Math.floor(x * 6.1) * 73856093) ^ (Math.floor(z * 4.3) * 19349663) ^ k) >>> 0);
     const fidi = c.map.name === 'fidi';

@@ -103,6 +103,8 @@ try {
   console.log('PASS: opaque-origin assets, shaders, touch movement/swing input, map/resume, portrait budget');
 } finally {
   await mkdir('artifacts', { recursive: true });
-  await writeFile('artifacts/cdn-smoke.json', JSON.stringify({ mode: live ? 'live' : 'mocked', base: info.base, stats, errors, failed, requests, responses }, null, 2));
+  const boot = await page.evaluate(() => ({ label: document.querySelector('#boot .lbl')?.textContent,
+    message: document.querySelector('#boot .msg')?.textContent, fallback: window.__ctx ? undefined : document.body.innerText.slice(0, 2000) })).catch(() => null);
+  await writeFile('artifacts/cdn-smoke.json', JSON.stringify({ mode: live ? 'live' : 'mocked', base: info.base, stats, boot, errors, failed, requests, responses }, null, 2));
   await browser.close();
 }

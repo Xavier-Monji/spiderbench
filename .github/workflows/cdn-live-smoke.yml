@@ -27,6 +27,10 @@ jobs:
       - run: npm run test:cdn
         env:
           CDN_LIVE: '1'
+      - name: CDN diagnostics
+        if: always()
+        run: |
+          node --input-type=module -e "import fs from 'node:fs'; const r=JSON.parse(fs.readFileSync('artifacts/cdn-smoke.json')); console.log('::notice title=CDN smoke report::'+JSON.stringify({...r,requests:r.requests.length,responses:r.responses.filter(v=>v.status>=400)}));"
       - uses: actions/upload-artifact@v4
         if: always()
         with:

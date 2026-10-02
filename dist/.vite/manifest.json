@@ -1,0 +1,98 @@
+{
+  "_GLTFLoader-QZ7k48tU.js": {
+    "file": "assets/GLTFLoader-QZ7k48tU.js",
+    "name": "GLTFLoader",
+    "imports": [
+      "_three.core-IlQ6F5ml.js"
+    ]
+  },
+  "_assets-Dr8IANtq.js": {
+    "file": "assets/assets-Dr8IANtq.js",
+    "name": "assets"
+  },
+  "_events-C_lqH4J9.js": {
+    "file": "assets/events-C_lqH4J9.js",
+    "name": "events"
+  },
+  "_fonts-DcCRW9m3.js": {
+    "file": "assets/fonts-DcCRW9m3.js",
+    "name": "fonts",
+    "imports": [
+      "_three.core-IlQ6F5ml.js",
+      "_assets-Dr8IANtq.js",
+      "_GLTFLoader-QZ7k48tU.js"
+    ],
+    "dynamicImports": [
+      "node_modules/three/examples/jsm/loaders/GLTFLoader.js"
+    ]
+  },
+  "_skeleton-7adGnDo-.js": {
+    "file": "assets/skeleton-7adGnDo-.js",
+    "name": "skeleton",
+    "imports": [
+      "_three.core-IlQ6F5ml.js"
+    ]
+  },
+  "_three.core-IlQ6F5ml.js": {
+    "file": "assets/three.core-IlQ6F5ml.js",
+    "name": "three.core"
+  },
+  "index.html": {
+    "file": "assets/index-CdU76ftN.js",
+    "name": "index",
+    "src": "index.html",
+    "isEntry": true,
+    "imports": [
+      "_fonts-DcCRW9m3.js",
+      "_three.core-IlQ6F5ml.js",
+      "_assets-Dr8IANtq.js",
+      "_GLTFLoader-QZ7k48tU.js",
+      "_skeleton-7adGnDo-.js"
+    ],
+    "dynamicImports": [
+      "node_modules/three/examples/jsm/loaders/GLTFLoader.js",
+      "src/game/systems/index.js",
+      "src/game/combat/index.js"
+    ],
+    "css": [
+      "assets/index-D_F6k476.css"
+    ]
+  },
+  "node_modules/three/examples/jsm/loaders/GLTFLoader.js": {
+    "file": "assets/GLTFLoader-XA7eE5R4.js",
+    "name": "GLTFLoader",
+    "src": "node_modules/three/examples/jsm/loaders/GLTFLoader.js",
+    "isDynamicEntry": true,
+    "imports": [
+      "_GLTFLoader-QZ7k48tU.js"
+    ]
+  },
+  "src/game/combat/index.js": {
+    "file": "assets/combat-CIyWstxl.js",
+    "name": "combat",
+    "src": "src/game/combat/index.js",
+    "isDynamicEntry": true,
+    "imports": [
+      "_three.core-IlQ6F5ml.js",
+      "_assets-Dr8IANtq.js",
+      "_skeleton-7adGnDo-.js",
+      "_events-C_lqH4J9.js"
+    ]
+  },
+  "src/game/systems/index.js": {
+    "file": "assets/systems-CNhD6Fg8.js",
+    "name": "systems",
+    "src": "src/game/systems/index.js",
+    "isDynamicEntry": true,
+    "imports": [
+      "_fonts-DcCRW9m3.js",
+      "_three.core-IlQ6F5ml.js",
+      "_assets-Dr8IANtq.js",
+      "_GLTFLoader-QZ7k48tU.js",
+      "_events-C_lqH4J9.js"
+    ],
+    "css": [
+      "assets/systems-Db0Y9jiv.css"
+    ]
+  }
+}

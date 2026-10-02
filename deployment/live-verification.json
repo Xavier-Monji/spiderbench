@@ -1,26 +1,28 @@
 {
-  "workflow": "https://github.com/Xavier-Monji/spiderbench/actions/runs/36987800648",
-  "testedSourceCommit": "0f69fad766bb27184ed4fcf26ef216ff24fb2a6a",
-  "verifiedAt": "2026-10-02T09:08:46Z",
+  "verifiedAt": "2026-10-02T11:29:11.479Z",
+  "workflow": "Live CDN launch",
+  "runId": 37000927010,
+  "runUrl": "https://github.com/Xavier-Monji/spiderbench/actions/runs/37000927010",
+  "sourceCommit": "634306135fbfa20e7891d338a4fec1905f3e0fae",
+  "artifactCommit": "0ab7b02196d08af57c4d61af5dad3d8220887a10",
   "conclusion": "success",
+  "method": "GitHub Actions real Chromium browser; no local build/server or response interception; opaque-origin Data URI",
+  "hardware": "Software GPU, not physical iPad/A14/Safari",
   "mode": "live",
-  "localServer": false,
-  "responseInterception": false,
-  "runner": "GitHub Actions / Chromium + SwiftShader (not physical A14)",
-  "requestCount": 89,
+  "base": "https://cdn.jsdelivr.net/gh/Xavier-Monji/spiderbench@0ab7b02196d08af57c4d61af5dad3d8220887a10/dist/",
   "stats": {
     "origin": "null",
-    "base": "https://cdn.jsdelivr.net/gh/Xavier-Monji/spiderbench@1024c11264ac99bd1b89d7326e15627c5937e741/dist/",
+    "base": "https://cdn.jsdelivr.net/gh/Xavier-Monji/spiderbench@0ab7b02196d08af57c4d61af5dad3d8220887a10/dist/",
     "quality": "mobile",
     "persistentSave": false,
-    "heapBytes": 1361384959,
+    "heapBytes": 751687332,
     "stream": {
       "tiles": 926,
-      "ready": 81,
-      "recipeBytes": 190278995,
-      "residentBytes": 252664116,
-      "peakResidentBytes": 252664116,
-      "maxResidentBytes": 268435456
+      "ready": 5,
+      "recipeBytes": 92312493,
+      "residentBytes": 27775222,
+      "peakResidentBytes": 27775222,
+      "maxResidentBytes": 67108864
     },
     "size": {
       "W": 1199,
@@ -28,9 +30,10 @@
     },
     "softwareCaptureScale": 0.35,
     "render": {
-      "calls": 331,
-      "triangles": 4442158
+      "calls": 306,
+      "triangles": 3079105
     },
+    "landscapeLitFraction": 0.9620024181983485,
     "touch": {
       "move": {
         "x": 0.8,
@@ -40,20 +43,50 @@
       "mode": "swing",
       "web": true
     },
+    "eviction": {
+      "before": {
+        "tiles": 926,
+        "ready": 5,
+        "recipeBytes": 92312493,
+        "residentBytes": 27775222,
+        "peakResidentBytes": 27775222,
+        "maxResidentBytes": 67108864
+      },
+      "far": {
+        "tiles": 926,
+        "ready": 0,
+        "recipeBytes": 92312493,
+        "residentBytes": 0,
+        "peakResidentBytes": 27775222,
+        "maxResidentBytes": 67108864
+      },
+      "returned": {
+        "tiles": 926,
+        "ready": 5,
+        "recipeBytes": 92312493,
+        "residentBytes": 27775222,
+        "peakResidentBytes": 27775222,
+        "maxResidentBytes": 67108864
+      },
+      "sameRecipes": true,
+      "ground": 0,
+      "map": true
+    },
     "portraitSize": {
       "W": 358,
       "H": 516
     },
+    "portraitLitFraction": 1,
     "audio": {
       "ready": true,
       "ctx": "running",
       "sr": 44100,
       "loadErr": null,
       "sprites": [
-        "world",
         "trav",
         "combat",
-        "ui"
+        "ui",
+        "world"
       ],
       "loops": [
         "alarm",
@@ -68,7 +101,7 @@
       "streamedMusic": true,
       "music": {
         "started": true,
-        "pos": 10.53,
+        "pos": 6.969,
         "I": 0,
         "night": 0,
         "day": 0,
@@ -80,79 +113,66 @@
       "activeLoops": 0,
       "media": [
         {
-          "src": "https://cdn.jsdelivr.net/gh/Xavier-Monji/spiderbench@1024c11264ac99bd1b89d7326e15627c5937e741/dist/assets/audio/music_day.ogg",
+          "src": "https://cdn.jsdelivr.net/gh/Xavier-Monji/spiderbench@0ab7b02196d08af57c4d61af5dad3d8220887a10/dist/assets/audio/music_day.ogg",
           "readyState": 4,
           "paused": false,
-          "time": 9.54688,
+          "time": 5.409432,
           "error": null
         },
         {
-          "src": "https://cdn.jsdelivr.net/gh/Xavier-Monji/spiderbench@1024c11264ac99bd1b89d7326e15627c5937e741/dist/assets/audio/music_night.ogg",
+          "src": "https://cdn.jsdelivr.net/gh/Xavier-Monji/spiderbench@0ab7b02196d08af57c4d61af5dad3d8220887a10/dist/assets/audio/music_night.ogg",
           "readyState": 4,
           "paused": false,
-          "time": 9.607845,
+          "time": 2.048351,
           "error": null
         },
         {
-          "src": "https://cdn.jsdelivr.net/gh/Xavier-Monji/spiderbench@1024c11264ac99bd1b89d7326e15627c5937e741/dist/assets/audio/music_pulseA.ogg",
+          "src": "https://cdn.jsdelivr.net/gh/Xavier-Monji/spiderbench@0ab7b02196d08af57c4d61af5dad3d8220887a10/dist/assets/audio/music_pulseA.ogg",
           "readyState": 4,
           "paused": false,
-          "time": 9.39597,
+          "time": 5.389122,
           "error": null
         },
         {
-          "src": "https://cdn.jsdelivr.net/gh/Xavier-Monji/spiderbench@1024c11264ac99bd1b89d7326e15627c5937e741/dist/assets/audio/music_pulseB.ogg",
+          "src": "https://cdn.jsdelivr.net/gh/Xavier-Monji/spiderbench@0ab7b02196d08af57c4d61af5dad3d8220887a10/dist/assets/audio/music_pulseB.ogg",
           "readyState": 4,
           "paused": false,
-          "time": 9.337922,
+          "time": 5.049534,
           "error": null
         }
       ]
     }
   },
+  "boot": {},
   "errors": [],
   "failed": [],
-  "httpErrors": [],
-  "intentionalMediaBufferAborts": [
+  "abortedMedia": [
     {
-      "url": "https://cdn.jsdelivr.net/gh/Xavier-Monji/spiderbench@1024c11264ac99bd1b89d7326e15627c5937e741/dist/assets/audio/music_day.ogg",
+      "url": "https://cdn.jsdelivr.net/gh/Xavier-Monji/spiderbench@0ab7b02196d08af57c4d61af5dad3d8220887a10/dist/assets/audio/music_day.ogg",
       "error": "net::ERR_ABORTED",
       "resourceType": "media"
     },
     {
-      "url": "https://cdn.jsdelivr.net/gh/Xavier-Monji/spiderbench@1024c11264ac99bd1b89d7326e15627c5937e741/dist/assets/audio/music_night.ogg",
+      "url": "https://cdn.jsdelivr.net/gh/Xavier-Monji/spiderbench@0ab7b02196d08af57c4d61af5dad3d8220887a10/dist/assets/audio/music_pulseA.ogg",
       "error": "net::ERR_ABORTED",
       "resourceType": "media"
     },
     {
-      "url": "https://cdn.jsdelivr.net/gh/Xavier-Monji/spiderbench@1024c11264ac99bd1b89d7326e15627c5937e741/dist/assets/audio/music_night.ogg",
+      "url": "https://cdn.jsdelivr.net/gh/Xavier-Monji/spiderbench@0ab7b02196d08af57c4d61af5dad3d8220887a10/dist/assets/audio/music_pulseB.ogg",
       "error": "net::ERR_ABORTED",
       "resourceType": "media"
     },
     {
-      "url": "https://cdn.jsdelivr.net/gh/Xavier-Monji/spiderbench@1024c11264ac99bd1b89d7326e15627c5937e741/dist/assets/audio/music_pulseA.ogg",
+      "url": "https://cdn.jsdelivr.net/gh/Xavier-Monji/spiderbench@0ab7b02196d08af57c4d61af5dad3d8220887a10/dist/assets/audio/music_night.ogg",
       "error": "net::ERR_ABORTED",
       "resourceType": "media"
     },
     {
-      "url": "https://cdn.jsdelivr.net/gh/Xavier-Monji/spiderbench@1024c11264ac99bd1b89d7326e15627c5937e741/dist/assets/audio/music_pulseB.ogg",
-      "error": "net::ERR_ABORTED",
-      "resourceType": "media"
-    },
-    {
-      "url": "https://cdn.jsdelivr.net/gh/Xavier-Monji/spiderbench@1024c11264ac99bd1b89d7326e15627c5937e741/dist/assets/audio/music_day.ogg",
-      "error": "net::ERR_ABORTED",
-      "resourceType": "media"
-    },
-    {
-      "url": "https://cdn.jsdelivr.net/gh/Xavier-Monji/spiderbench@1024c11264ac99bd1b89d7326e15627c5937e741/dist/assets/audio/music_pulseB.ogg",
-      "error": "net::ERR_ABORTED",
-      "resourceType": "media"
-    },
-    {
-      "url": "https://cdn.jsdelivr.net/gh/Xavier-Monji/spiderbench@1024c11264ac99bd1b89d7326e15627c5937e741/dist/assets/audio/music_pulseA.ogg",
+      "url": "https://cdn.jsdelivr.net/gh/Xavier-Monji/spiderbench@0ab7b02196d08af57c4d61af5dad3d8220887a10/dist/assets/audio/music_night.ogg",
       "error": "net::ERR_ABORTED",
       "resourceType": "media"
     }
-  ]
+  ],
+  "requests": 87,
+  "responses": []
 }

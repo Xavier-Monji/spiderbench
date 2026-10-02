@@ -85,5 +85,62 @@
     "PROFILE_HEAP_MB=384 PROFILE_OUTPUT=artifacts/startup-memory-384m.json npm run profile:startup",
     "npm run build:cdn",
     "npm run test:cdn"
-  ]
+  ],
+  "publishedArtifact": "0ab7b02196d08af57c4d61af5dad3d8220887a10",
+  "updatedLiveProductionLaunch": {
+    "mode": "live",
+    "runUrl": "https://github.com/Xavier-Monji/spiderbench/actions/runs/37000927010",
+    "finalHeapBytes": 751687332,
+    "requests": 87,
+    "errors": [],
+    "failedAssets": [],
+    "stream": {
+      "tiles": 926,
+      "ready": 5,
+      "recipeBytes": 92312493,
+      "residentBytes": 27775222,
+      "peakResidentBytes": 27775222,
+      "maxResidentBytes": 67108864
+    },
+    "touch": {
+      "move": {
+        "x": 0.8,
+        "y": 0.6
+      },
+      "swing": true,
+      "mode": "swing",
+      "web": true
+    },
+    "evictionAndReturn": {
+      "before": {
+        "tiles": 926,
+        "ready": 5,
+        "recipeBytes": 92312493,
+        "residentBytes": 27775222,
+        "peakResidentBytes": 27775222,
+        "maxResidentBytes": 67108864
+      },
+      "far": {
+        "tiles": 926,
+        "ready": 0,
+        "recipeBytes": 92312493,
+        "residentBytes": 0,
+        "peakResidentBytes": 27775222,
+        "maxResidentBytes": 67108864
+      },
+      "returned": {
+        "tiles": 926,
+        "ready": 5,
+        "recipeBytes": 92312493,
+        "residentBytes": 27775222,
+        "peakResidentBytes": 27775222,
+        "maxResidentBytes": 67108864
+      },
+      "sameRecipes": true,
+      "ground": 0,
+      "map": true
+    },
+    "landscapeLitFraction": 0.9620024181983485,
+    "portraitLitFraction": 1
+  }
 }

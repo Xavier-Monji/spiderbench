@@ -5,7 +5,13 @@
   "entry": "https://cdn.jsdelivr.net/gh/Xavier-Monji/spiderbench@1024c11264ac99bd1b89d7326e15627c5937e741/dist/index.html",
   "launcherBytes": 711,
   "dataUriBytes": 984,
-  "published": false,
+  "published": true,
   "commit": "1024c11264ac99bd1b89d7326e15627c5937e741",
-  "artifactBytes": 103076775
+  "artifactBytes": 103076775,
+  "verifiedAt": "2026-10-02T09:08:46Z",
+  "verification": {
+    "mode": "live",
+    "workflow": "https://github.com/Xavier-Monji/spiderbench/actions/runs/36987800648",
+    "report": "deployment/live-verification.json"
+  }
 }

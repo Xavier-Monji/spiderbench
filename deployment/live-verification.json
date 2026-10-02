@@ -1,0 +1,158 @@
+{
+  "workflow": "https://github.com/Xavier-Monji/spiderbench/actions/runs/36987800648",
+  "testedSourceCommit": "0f69fad766bb27184ed4fcf26ef216ff24fb2a6a",
+  "verifiedAt": "2026-10-02T09:08:46Z",
+  "conclusion": "success",
+  "mode": "live",
+  "localServer": false,
+  "responseInterception": false,
+  "runner": "GitHub Actions / Chromium + SwiftShader (not physical A14)",
+  "requestCount": 89,
+  "stats": {
+    "origin": "null",
+    "base": "https://cdn.jsdelivr.net/gh/Xavier-Monji/spiderbench@1024c11264ac99bd1b89d7326e15627c5937e741/dist/",
+    "quality": "mobile",
+    "persistentSave": false,
+    "heapBytes": 1361384959,
+    "stream": {
+      "tiles": 926,
+      "ready": 81,
+      "recipeBytes": 190278995,
+      "residentBytes": 252664116,
+      "peakResidentBytes": 252664116,
+      "maxResidentBytes": 268435456
+    },
+    "size": {
+      "W": 1199,
+      "H": 833
+    },
+    "softwareCaptureScale": 0.35,
+    "render": {
+      "calls": 331,
+      "triangles": 4442158
+    },
+    "touch": {
+      "move": {
+        "x": 0.8,
+        "y": 0.6
+      },
+      "swing": true,
+      "mode": "swing",
+      "web": true
+    },
+    "portraitSize": {
+      "W": 358,
+      "H": 516
+    },
+    "audio": {
+      "ready": true,
+      "ctx": "running",
+      "sr": 44100,
+      "loadErr": null,
+      "sprites": [
+        "world",
+        "trav",
+        "combat",
+        "ui"
+      ],
+      "loops": [
+        "alarm",
+        "siren"
+      ],
+      "stems": [
+        "day",
+        "night",
+        "pulseA",
+        "pulseB"
+      ],
+      "streamedMusic": true,
+      "music": {
+        "started": true,
+        "pos": 10.53,
+        "I": 0,
+        "night": 0,
+        "day": 0,
+        "nightG": 0,
+        "pulseA": 0,
+        "pulseB": 0
+      },
+      "voices": 0,
+      "activeLoops": 0,
+      "media": [
+        {
+          "src": "https://cdn.jsdelivr.net/gh/Xavier-Monji/spiderbench@1024c11264ac99bd1b89d7326e15627c5937e741/dist/assets/audio/music_day.ogg",
+          "readyState": 4,
+          "paused": false,
+          "time": 9.54688,
+          "error": null
+        },
+        {
+          "src": "https://cdn.jsdelivr.net/gh/Xavier-Monji/spiderbench@1024c11264ac99bd1b89d7326e15627c5937e741/dist/assets/audio/music_night.ogg",
+          "readyState": 4,
+          "paused": false,
+          "time": 9.607845,
+          "error": null
+        },
+        {
+          "src": "https://cdn.jsdelivr.net/gh/Xavier-Monji/spiderbench@1024c11264ac99bd1b89d7326e15627c5937e741/dist/assets/audio/music_pulseA.ogg",
+          "readyState": 4,
+          "paused": false,
+          "time": 9.39597,
+          "error": null
+        },
+        {
+          "src": "https://cdn.jsdelivr.net/gh/Xavier-Monji/spiderbench@1024c11264ac99bd1b89d7326e15627c5937e741/dist/assets/audio/music_pulseB.ogg",
+          "readyState": 4,
+          "paused": false,
+          "time": 9.337922,
+          "error": null
+        }
+      ]
+    }
+  },
+  "errors": [],
+  "failed": [],
+  "httpErrors": [],
+  "intentionalMediaBufferAborts": [
+    {
+      "url": "https://cdn.jsdelivr.net/gh/Xavier-Monji/spiderbench@1024c11264ac99bd1b89d7326e15627c5937e741/dist/assets/audio/music_day.ogg",
+      "error": "net::ERR_ABORTED",
+      "resourceType": "media"
+    },
+    {
+      "url": "https://cdn.jsdelivr.net/gh/Xavier-Monji/spiderbench@1024c11264ac99bd1b89d7326e15627c5937e741/dist/assets/audio/music_night.ogg",
+      "error": "net::ERR_ABORTED",
+      "resourceType": "media"
+    },
+    {
+      "url": "https://cdn.jsdelivr.net/gh/Xavier-Monji/spiderbench@1024c11264ac99bd1b89d7326e15627c5937e741/dist/assets/audio/music_night.ogg",
+      "error": "net::ERR_ABORTED",
+      "resourceType": "media"
+    },
+    {
+      "url": "https://cdn.jsdelivr.net/gh/Xavier-Monji/spiderbench@1024c11264ac99bd1b89d7326e15627c5937e741/dist/assets/audio/music_pulseA.ogg",
+      "error": "net::ERR_ABORTED",
+      "resourceType": "media"
+    },
+    {
+      "url": "https://cdn.jsdelivr.net/gh/Xavier-Monji/spiderbench@1024c11264ac99bd1b89d7326e15627c5937e741/dist/assets/audio/music_pulseB.ogg",
+      "error": "net::ERR_ABORTED",
+      "resourceType": "media"
+    },
+    {
+      "url": "https://cdn.jsdelivr.net/gh/Xavier-Monji/spiderbench@1024c11264ac99bd1b89d7326e15627c5937e741/dist/assets/audio/music_day.ogg",
+      "error": "net::ERR_ABORTED",
+      "resourceType": "media"
+    },
+    {
+      "url": "https://cdn.jsdelivr.net/gh/Xavier-Monji/spiderbench@1024c11264ac99bd1b89d7326e15627c5937e741/dist/assets/audio/music_pulseB.ogg",
+      "error": "net::ERR_ABORTED",
+      "resourceType": "media"
+    },
+    {
+      "url": "https://cdn.jsdelivr.net/gh/Xavier-Monji/spiderbench@1024c11264ac99bd1b89d7326e15627c5937e741/dist/assets/audio/music_pulseA.ogg",
+      "error": "net::ERR_ABORTED",
+      "resourceType": "media"
+    }
+  ]
+}

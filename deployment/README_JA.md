@@ -12,6 +12,7 @@
 - `deployment/launcher.data-uri.txt`: **1行**の Data URI。UTF-8 HTML の Base64 です。
 - `deployment/build-info.json`: 実際のCDN URL、バイト数、公開・検証状態。
 - `deployment/release.json`: 配信専用コミットの40桁SHAとGitツリー、アセット総サイズ。
+- `deployment/live-verification.json`: 実CDNから起動したブラウザ検証の結果と公開CIへのリンク。
 
 `dist/` はソースの作業ツリーでは従来どおり Git 管理対象外です。公開時には `dist/` と LICENSE **だけ**のGitツリーを別コミットに保存し、固定セッションブランチのソースコミットの第2親として履歴に保持します。ソース／デスクトップ用原本はそのまま残します。ZIPや公開コミットからも復元できます。
 
@@ -71,6 +72,8 @@ npm run archive:cdn         # 最後のCDNビルドをZIPに保存
 
 ## 公開と起動
 
+**公開済み・実CDN起動検証済み（2026-10-02）。** 配信コミット: `1024c11264ac99bd1b89d7326e15627c5937e741`。起動HTMLは **711 bytes**、Data URI は **984 bytes**（末尾改行を除く）。[ライブ検証の成功結果](https://github.com/Xavier-Monji/spiderbench/actions/runs/36987800648)。
+
 `deployment/launcher.data-uri.txt` の**1行全体**をブラウザのアドレス欄へ貼り付けて開きます。素材を読み込み、街を生成した後、そのままタッチ操作でプレイできます。別途サーバーを用意したり `dist/` を配置したりする必要はありません。`launcher.html` を開いても同じ起動処理になります。初回ダウンロード／生成には待ち時間があり、オフラインでは動きません。
 
 配信URLは `deployment/build-info.json` に記録されています。形式は次のとおりで、可変のブランチ名ではなく**公開済みの配信専用コミットSHA**で固定します。
@@ -107,7 +110,7 @@ npm run test:cdn            # ローカルdistでCDNを模擬した全ゲーム�
 CDN_LIVE=1 npm run test:cdn  # 公開済みjsDelivrのみから実ゲームを読み込むライブ検証
 ```
 
-- `npm test` **25件**、`test:browser` **8件**、全ゲーム `test:cdn` の起動／操作検証が成功。
+- `npm test` **25件**、`test:browser` **8件**、全ゲーム `test:cdn` の起動／操作検証が成功。実CDNのライブ検証も成功（89リクエスト、JS／シェーダーエラー・HTTPエラー・取得失敗0）。ストリーミングBGMの正常なバッファ／Range読込中断は別記し、4音源のデコード・再生状態にエラーがないことを検証。
 - Chromium153 + SwiftShader、1180×820 / DPR2 のタッチ環境で検証。**UA を Safari にしていても Safari エンジンの検証ではありません。**
 - デフォルトのData URI統合テストはCDN応答をローカル `dist/` で模擬します。`CDN_LIVE=1` は応答を差し替えず、実際のCDNからHTML／モジュール／画像／モデルを取得します。JSONレポートの `mode` で両者を区別します。
 - 本番のネイティブ画素予算は1199×833 ≤100万画素で確認。ソフトウェアGPUでの全都市画像キャプチャは `SMOKE_SCALE=0.35` に下げます（`SMOKE_SCALE=0.85 npm run test:cdn` で既定解像度のキャプチャ）。これは本番のスケール下限設定を変えません。

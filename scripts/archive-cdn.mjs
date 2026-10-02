@@ -24,7 +24,11 @@ await mkdir('deployment', { recursive: true });
 const destination = 'deployment/spiderbench-cdn.zip', out = createWriteStream(destination), central = [], sha = createHash('sha256');
 let offset = 0;
 const put = async data => { sha.update(data); offset += data.length; if (!out.write(data)) await once(out, 'drain'); };
-for (const file of [...await files('dist'), 'LICENSE', 'deployment/README_JA.md', 'deployment/launcher.html', 'deployment/launcher.data-uri.txt', 'deployment/build-info.json']) {
+const releaseMetadata = [];
+for (const file of ['deployment/release.json', 'deployment/live-verification.json']) {
+  try { await readFile(file); releaseMetadata.push(file); } catch (e) { if (e.code !== 'ENOENT') throw e; }
+}
+for (const file of [...await files('dist'), 'LICENSE', 'deployment/README_JA.md', 'deployment/launcher.html', 'deployment/launcher.data-uri.txt', 'deployment/build-info.json', ...releaseMetadata]) {
   const original = await readFile(file), compressed = deflateRawSync(original, { level: 6 }), name = Buffer.from(file.replaceAll(path.sep, '/'));
   const h = Buffer.alloc(30); h.writeUInt32LE(0x04034b50); h.writeUInt16LE(20,4); h.writeUInt16LE(0x800,6); h.writeUInt16LE(8,8);
   h.writeUInt16LE(33,12); h.writeUInt32LE(crc(original),14); h.writeUInt32LE(compressed.length,18); h.writeUInt32LE(original.length,22); h.writeUInt16LE(name.length,26);

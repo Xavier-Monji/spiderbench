@@ -1,0 +1,27 @@
+<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1"><style>body{margin:0;background:#142033}canvas{display:block}</style><script type="module">
+import * as THREE from '/node_modules/three/build/three.module.js';
+import { getQuality } from '/src/render/quality.js';
+import { createLighting } from '/src/render/lighting.js';
+import { createPipeline } from '/src/render/pipeline.js';
+import { createResolutionController } from '/src/render/resolution.js';
+import { compactGeometry } from '/src/render/geometry-budget.js';
+window.__spiderbenchQuality = 'mobile';
+const q = getQuality(), renderer = new THREE.WebGLRenderer({ antialias: false, reversedDepthBuffer: true });
+renderer.outputColorSpace = THREE.SRGBColorSpace; renderer.shadowMap.enabled = true;
+const resolution = createResolutionController(renderer, q); document.body.appendChild(renderer.domElement);
+const scene = new THREE.Scene(), camera = new THREE.PerspectiveCamera(55, innerWidth / innerHeight, .1, 6000);
+camera.position.set(15, 10, 20); camera.lookAt(0, 3, 0);
+const ground = new THREE.Mesh(compactGeometry(new THREE.BoxGeometry(60, 1, 60)), new THREE.MeshStandardMaterial({ color: '#969999', roughness: .8 }));
+ground.position.y = -.5; ground.receiveShadow = true; scene.add(ground);
+const building = new THREE.Mesh(compactGeometry(new THREE.BoxGeometry(8, 10, 8)), new THREE.MeshStandardMaterial({ color: '#cf283e', roughness: .3 }));
+building.position.y = 5; building.castShadow = building.receiveShadow = true; scene.add(building);
+// Regression: this HDR highlight deliberately exceeds the 65504 maximum of a half-float render target.
+const highlight = new THREE.Mesh(new THREE.BoxGeometry(3,3,3), new THREE.MeshBasicMaterial({ color: new THREE.Color(100000,100000,100000) }));
+highlight.position.set(-7,5,5); scene.add(highlight);
+const lighting = createLighting({ renderer, scene }), pipeline = createPipeline({ renderer, scene, camera, lighting }); resolution.attach(pipeline);
+lighting.update(camera); pipeline.render(1 / 30);
+window.renderFixture = { renderer, pipeline, camera, resolution, scene, lighting, q, highlight,
+  resize() { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); resolution.resize(); lighting.update(camera); pipeline.render(1 / 30); },
+  render() { lighting.update(camera); pipeline.render(1 / 30); } };
+addEventListener('resize', () => renderFixture.resize());
+</script>

@@ -1,3 +1,4 @@
+import { assetUrl } from '../platform/assets.js';
 // OWNER: rooftops agent (veg r1). Roof-garden planting: instanced shrubs, perennials and ornamental grasses made of
 // alpha-cut cards textured with the image-generated foliage atlas (public/assets/city/tex/roofplants.webp, 2x2 tiles:
 // 0 boxwood / privet shrub, 1 fountain grass, 2 sedum + rudbeckia perennials, 3 hosta / fern / hydrangea leaves).
@@ -90,7 +91,7 @@ export class RoofPlants {
   get count() { return this.items[0].length + this.items[1].length; }
   build(scene) {
     if (!this.count) return;
-    const tex = new THREE.TextureLoader().load('/assets/city/tex/roofplants.webp');
+    const tex = new THREE.TextureLoader().load(assetUrl('/assets/city/tex/roofplants.webp'));
     tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 4;
     const mat = plantMaterial(tex);
     this.pools = [moundGeometry(), grassGeometry()].map((g, i) => {

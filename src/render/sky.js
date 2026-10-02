@@ -320,7 +320,7 @@ export function createSky(renderer, quality) {
   });
 
   // 3D noise (generated on GPU once)
-  const NS = 128;
+  const NS = quality.cloudNoiseSize ?? 128;
   const noiseRT = new THREE.WebGL3DRenderTarget(NS, NS, NS, {
     type: THREE.UnsignedByteType, format: THREE.RGBAFormat, depthBuffer: false,
   });
@@ -473,7 +473,7 @@ void main() {
   const envScene = new THREE.Scene();
   const envMat = new THREE.ShaderMaterial({
     name: 'envSky', glslVersion: THREE.GLSL3, side: THREE.BackSide, depthWrite: false, depthTest: false,
-    defines: { CLOUD_STEPS: 48, CLOUD_LIGHT_STEPS: 4 },
+    defines: { CLOUD_STEPS: quality.mobile ? 16 : 48, CLOUD_LIGHT_STEPS: quality.mobile ? 2 : 4 },
     uniforms: { ...skyUniforms, uCamPos: { value: new THREE.Vector3(0, 60, 0) }, uGround: { value: new THREE.Vector3(0.2, 0.18, 0.155) }, uEnvSat: { value: 0.62 }, uEnvFacade: { value: new THREE.Vector3(0.34, 0.29, 0.23) } },
     vertexShader: /* glsl */`out vec3 vDir; void main(){ vDir = position; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
     fragmentShader: /* glsl */`
@@ -509,7 +509,7 @@ void main() {
   const envMesh = new THREE.Mesh(new THREE.BoxGeometry(10, 10, 10), envMat);
   envMesh.frustumCulled = false;
   envScene.add(envMesh);
-  const cubeRT = new THREE.WebGLCubeRenderTarget(256, { type: THREE.HalfFloatType, generateMipmaps: false });
+  const cubeRT = new THREE.WebGLCubeRenderTarget(quality.mobile ? quality.envSize : 256, { type: THREE.HalfFloatType, generateMipmaps: false });
   const cubeCam = new THREE.CubeCamera(0.1, 100, cubeRT);
   envScene.add(cubeCam);
   const pmrem = new THREE.PMREMGenerator(renderer);

@@ -8,6 +8,7 @@
 //  * rendering: 3 instanced tiers per vehicle type (Blender model < 90 m, procedural low-poly < 250 m, proxy box
 //    beyond), CPU frustum culling, brake lights via per-instance state.
 import * as THREE from 'three';
+import { getQuality } from '../../render/quality.js';
 import { G, mulberry32, hash2, islandNear, bikeLaneAt, DIAG_SEGS, diagD } from '../layout.js'; // (layout2 r3) islandNear, bikeLaneAt
 import { connector, connAt, mapPhase, bridgeJunctions } from './roads.js';
 import { createJunctions } from './junctions.js'; // (citylife junctions) conflict / reservation model
@@ -16,10 +17,11 @@ import { createContactAO, createHeadlightPools } from '../contactao.js'; // (day
 import { csmShared, SHADOW_PROXY_LAYER } from '../../render/csm.js'; // (perf r2) shadow proxies
 import { perf2Off } from '../tilebatch.js'; // (perf r2) A/B switch
 
-const RA = 640;            // streaming radius (m)
-const PARK_R = 500;        // parked cars exist on links within this radius ((citylife r2) 420 -> 500: no pop-in seen from rooftops, inside the haze)
+const MOBILE = !!getQuality().mobile;
+const RA = MOBILE ? 450 : 640;            // streaming radius (m)
+const PARK_R = MOBILE ? 360 : 500;        // parked cars exist on links within this radius ((citylife r2) 420 -> 500: no pop-in seen from rooftops, inside the haze)
 const HI_D = 48, LOW_D = 230; // (vehicles r1) LOD0 (~5.5k tris) < 48 m, LOD1 (~1.1k) < 230 m, LOD2 (~160, grouped) beyond
-const MAX_CARS = 2600;
+const MAX_CARS = MOBILE ? 1400 : 2600;
 const A = 2.0, B = 3.2, S0 = 2.0, TH = 1.1;
 const PLAYER_R = 0.5;        // player body half-width used by drivers (arms + stance), metres
 // (citylife junctions) user: 'reduce car density by a bit' -> open gaps between platoons x1.3 (~-18 % cars); the authored

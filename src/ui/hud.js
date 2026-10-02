@@ -2,6 +2,7 @@
 // objective markers, off-screen objective indicator (left diamond), controls help overlay.
 // createHud({player, world, camera}) -> {update(dt), setVisible(b), setObjective(vec3|null), showHelp(b)}
 import * as THREE from 'three';
+import { getQuality } from '../render/quality.js';
 import { loadFonts } from './fonts.js';
 import { createReticle } from './reticle.js';
 
@@ -64,6 +65,7 @@ function toPolys(list) {
 
 export function createHud({ player, world, camera }) {
   css();
+  if (getQuality().mobile) PX_PER_M = 0.32;
   const root = document.getElementById('hud') || document.body.appendChild(Object.assign(document.createElement('div'), { id: 'hud' }));
   root.innerHTML = `
     <div class="mm-wrap"><div class="mm">

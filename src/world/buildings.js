@@ -1,3 +1,5 @@
+import { getQuality } from '../render/quality.js';
+import { deferredBuilder } from './streaming.js';
 // OWNER: citygeo. Lot subdivision + NYC building archetypes -> facade geometry, trims, rooftop details, collision.
 // Every visible solid is emitted through `solid*()` helpers that write the triangles AND the matching collision
 // primitive (collision.js) in the same call, so world.raycast / groundHeight match the rendered surfaces exactly.
@@ -44,7 +46,12 @@ export function generateBuildings(blocks, seed = 1234, opts = {}) {
   const tile = (x, z) => {
     const k = tkey(x, z);
     let t = tiles.get(k);
-    if (!t) { t = { fac: new FacadeBuilder(), lod: new FacadeBuilder(), det: new MB(), key: k, cx: (Math.floor(x / TILE) + 0.5) * TILE, cz: (Math.floor(z / TILE) + 0.5) * TILE }; tiles.set(k, t); }
+    if (!t) {
+      const cx = (Math.floor(x / TILE) + 0.5) * TILE, cz = (Math.floor(z / TILE) + 0.5) * TILE, Q = getQuality();
+      const fac = Q.mobile ? deferredBuilder(FacadeBuilder, { methods: ['quad', 'horiz', 'box', 'fan', 'ring', 'cyl', 'innerRing'], role: 'facade', cx, cz, range: Q.facadeNear }) : new FacadeBuilder();
+      const det = Q.mobile ? deferredBuilder(MB, { methods: ['vert', 'tri', 'quad', 'box', 'boxC', 'cyl', 'tube'], role: 'detail', cx, cz, range: Q.detailFar }) : new MB();
+      t = { fac, lod: new FacadeBuilder(), det, key: k, cx, cz }; tiles.set(k, t);
+    }
     return t;
   };
 

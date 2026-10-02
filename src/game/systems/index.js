@@ -32,9 +32,10 @@ export function initSystems(ctx) {
   const t0 = performance.now();
   const save = createSave();
   // saved graphics preset (quality is chosen from the URL at boot by render/quality.js)
-  if (save.persistent && !q.has('q') && save.state.settings.quality && save.state.settings.quality !== 'high') {
+  if (!ctx.lighting.quality.mobile && save.persistent && !q.has('q') && save.state.settings.quality && save.state.settings.quality !== 'high') {
     const u = new URL(location.href); u.searchParams.set('q', save.state.settings.quality); location.replace(u.toString()); return null;
   }
+  if (ctx.lighting.quality.mobile) save.state.settings.quality = 'mobile';
   ctx.events = events;
   const audio = createAudio();
   const ui = createUI({ camera: ctx.camera, audio });
@@ -85,10 +86,7 @@ export function initSystems(ctx) {
     ctx.lighting?.setDryPuddles?.(s.puddles !== false); // (user r-nopuddles)
     if (s.renderScale !== appliedScale) {
       appliedScale = s.renderScale;
-      if (appliedScale !== 1 || ctx.renderer.getPixelRatio() !== Math.min(devicePixelRatio, 1.5)) {
-        ctx.renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5) * s.renderScale);
-        ctx.renderer.setSize(innerWidth, innerHeight); ctx.pipeline.setSize?.(innerWidth, innerHeight);
-      }
+      ctx.resolution.setUserScale(s.renderScale);
     }
     prog.recompute();
     const z = String(s.hudScale ?? 1);
@@ -110,10 +108,13 @@ export function initSystems(ctx) {
   });
 
   // ---------------------------------------------------------------- interaction ([F])
+  let touchInteract = false;
   let fHeld = false, fPressed = false, holdT = 0, holdId = null, lastTick = 0;
+  sys.setInteractHeld = held => { if (held && !touchInteract && flow.isPlaying) fPressed = true; touchInteract = held && flow.isPlaying; };
+  on('flow:mode', () => { touchInteract = false; fHeld = false; fPressed = false; });
   flow.onKey((e, mode) => { if (mode === 'play' && e.code === 'KeyF' && !e.repeat) { fHeld = true; fPressed = true; } return false; });
   addEventListener('keyup', e => { if (e.code === 'KeyF') fHeld = false; });
-  addEventListener('blur', () => { fHeld = false; });
+  addEventListener('blur', () => { fHeld = touchInteract = false; });
   function interact(dt) {
     const p = ctx.player.position;
     const cands = [sys.towers.interact(p), sys.collect.interact(p, ctx.camera), sys.crimes.interact(p)].filter(Boolean);
@@ -125,10 +126,10 @@ export function initSystems(ctx) {
       ui.prompt({ label: c.label, sub: c.sub, progress: 0, pos: c.pos });
       if (fPressed) { c.action(); ui.prompt(null); }
     } else {
-      if (fHeld) {
+      if (fHeld || touchInteract) {
         holdT += dt; const k = Math.min(1, holdT / c.hold);
         if (c.tick && performance.now() - lastTick > 90) { lastTick = performance.now(); c.tick(k); }
-        if (k >= 1) { holdT = 0; fHeld = false; c.action(); ui.prompt(null); fPressed = false; return; }
+        if (k >= 1) { holdT = 0; fHeld = touchInteract = false; c.action(); ui.prompt(null); fPressed = false; return; }
       } else holdT = Math.max(0, holdT - dt * 2);
       ui.prompt({ label: c.label, sub: c.sub, progress: holdT / c.hold, key: 'F', pos: c.pos });
     }

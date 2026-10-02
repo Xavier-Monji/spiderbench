@@ -23,6 +23,17 @@ export function createInput(el) {
   const keys = new Set(); const tapped = new Set(); // tapped: keys pressed since last poll (latched so short taps are never lost)
   const mouse = { dx: 0, dy: 0, buttons: 0 };
   const synthetic = new Set();
+  const touchHeld = new Set(), touchTapped = new Set();
+  const touch = {
+    enabled: false, move: { x: 0, y: 0 }, look: { dx: 0, dy: 0 },
+    setMove(x, y) { const len = Math.max(1, Math.hypot(x, y)); this.move.x = x / len; this.move.y = y / len; },
+    addLook(dx, dy) { this.look.dx += dx; this.look.dy += dy; },
+    press(code) { if (!touchHeld.has(code)) touchTapped.add(code); touchHeld.add(code); },
+    release(code) { touchHeld.delete(code); },
+    isDown(code) { return touchHeld.has(code); },
+    clear() { touchHeld.clear(); touchTapped.clear(); this.setMove(0, 0); this.look.dx = this.look.dy = 0; },
+  };
+  const onTouchUI = e => e.target?.closest?.('[data-touch-ui]') || e.sourceCapabilities?.firesTouchEvents;
   const isTyping = e => /^(INPUT|TEXTAREA|SELECT)$/.test(e.target?.tagName || '');
   addEventListener('keydown', e => {
     if (isTyping(e)) return;
@@ -32,8 +43,13 @@ export function createInput(el) {
     if (e.ctrlKey && /^(Key[WASDEFQRCZ]|Space|Arrow)/.test(e.code)) e.preventDefault();
   });
   addEventListener('keyup', e => keys.delete(e.code));
-  addEventListener('blur', () => { keys.clear(); mouse.buttons = 0; });
-  el.addEventListener('click', () => { try { el.requestPointerLock?.(); } catch {} });
+  const clear = () => { keys.clear(); tapped.clear(); synthetic.clear(); touch.clear(); mouse.buttons = mouse.dx = mouse.dy = 0; tappedBtn.v = 0; sling.tap = sling.held = 0; };
+  addEventListener('blur', clear);
+  document.addEventListener('visibilitychange', () => { if (document.hidden) clear(); });
+  el.addEventListener('click', e => {
+    if (e.pointerType === 'touch' || e.pointerType === 'pen' || onTouchUI(e)) return;
+    try { el.requestPointerLock?.()?.catch?.(() => {}); } catch {}
+  });
   addEventListener('mousemove', e => {
     // release-only resync: a mouseup lost outside the window (no pointer lock) must never leave the web stuck on.
     // (DOM MouseEvent.buttons: 1 left, 2 right, 4 middle — our bits are 1 << e.button: 1 left, 2 middle, 4 right)
@@ -52,6 +68,7 @@ export function createInput(el) {
   const sling = { gate: false, tap: 0, held: 0 };
   const ctrlHeld = e => e.ctrlKey || keys.has('ControlLeft') || keys.has('ControlRight') || synthetic.has('ControlLeft');
   addEventListener('mousedown', e => {
+    if (onTouchUI(e)) return;
     if ((e.button === 0 || e.button === 2) && sling.gate && ctrlHeld(e)) { sling.tap |= 1 << e.button; sling.held |= 1 << e.button; e.preventDefault(); return; }
     mouse.buttons |= 1 << e.button; tappedBtn.v |= 1 << e.button; if (e.button === 1) e.preventDefault(); });
   addEventListener('mouseup', e => { mouse.buttons &= ~(1 << e.button); sling.held &= ~(1 << e.button); });
@@ -64,18 +81,18 @@ export function createInput(el) {
     swing: false, jump: false, zip: false, sprint: false, walk: false, drop: false, quick: false, rope: false, jumpHeld: 0, aimT: 99,
   };
   const dz = v => (Math.abs(v) < 0.15 ? 0 : (v - Math.sign(v) * 0.15) / 0.85);
-  const has = c => keys.has(c) || synthetic.has(c) || tapped.has(c);
+  const has = c => keys.has(c) || synthetic.has(c) || tapped.has(c) || touchHeld.has(c) || touchTapped.has(c);
   const BTN = { MouseLeft: 1, MouseMiddle: 2, MouseRight: 4 };
 
   function poll(dt = 1 / 60) {
-    let mx = 0, my = 0;
+    let mx = touch.move.x, my = touch.move.y;
     if (has('KeyW') || has('ArrowUp')) my += 1;
     if (has('KeyS') || has('ArrowDown')) my -= 1;
     if (has('KeyD') || has('ArrowRight')) mx += 1;
     if (has('KeyA') || has('ArrowLeft')) mx -= 1;
-    let lx = mouse.dx, ly = mouse.dy; mouse.dx = mouse.dy = 0;
+    let lx = mouse.dx + touch.look.dx, ly = mouse.dy + touch.look.dy; mouse.dx = mouse.dy = 0; touch.look.dx = touch.look.dy = 0;
     let btn = mouse.buttons | tappedBtn.v; tappedBtn.v = 0;
-    for (const [k, b] of Object.entries(BTN)) if (synthetic.has(k)) btn |= b;
+    for (const [k, b] of Object.entries(BTN)) if (synthetic.has(k) || touchHeld.has(k) || touchTapped.has(k)) btn |= b;
     let swing = !!(btn & 4);
     let sprint = has('ShiftLeft') || has('ShiftRight');
     const walk = false; // user r12 Shift-walk DISABLED (user r-nowalk: "disable walking"): Shift = ground parkour / wall-run again
@@ -101,9 +118,9 @@ export function createInput(el) {
       quick ||= b(4) && !b(5); // L1 alone (L1+R1 = combat throw)
       swing ||= rt && !zipCombo; sprint ||= rt && !zipCombo; jump ||= b(0); zip ||= zipCombo || b(3); drop ||= b(1);
     }
-    tapped.clear();
+    tapped.clear(); touchTapped.clear();
     const len = Math.hypot(mx, my); if (len > 1) { mx /= len; my /= len; }
-    Object.assign(state, { move: { x: mx, y: my }, look: { dx: lx, dy: ly }, swing, jump, zip, drop, sprint, walk, quick, rope, usingPad, ctrl, slingL, slingR });
+    Object.assign(state, { move: { x: mx, y: my }, look: { dx: lx, dy: ly }, swing, jump, zip, drop, sprint, walk, quick, rope, usingPad, usingTouch: touch.enabled, ctrl, slingL, slingR });
     for (const k of ['swing', 'jump', 'zip', 'drop', 'sprint', 'walk', 'quick', 'rope']) {
       state[k + 'Pressed'] = state[k] && !prev[k];
       state[k + 'Released'] = !state[k] && prev[k];
@@ -115,8 +132,8 @@ export function createInput(el) {
   }
 
   return {
-    keys, mouse, state, poll, sling,
-    press(code) { synthetic.add(code); }, release(code) { synthetic.delete(code); }, releaseAll() { synthetic.clear(); },
+    keys, mouse, state, poll, sling, touch, clear,
+    press(code) { synthetic.add(code); }, release(code) { synthetic.delete(code); }, releaseAll() { clear(); },
     consumeMouse() { const r = { dx: mouse.dx, dy: mouse.dy }; mouse.dx = mouse.dy = 0; return r; },
   };
 }

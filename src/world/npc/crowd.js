@@ -1,3 +1,4 @@
+import { assetUrl } from '../../platform/assets.js';
 // OWNER: citylife engineer. Pedestrian crowd: Blender-modelled people (tools/blender/city_npc.py ->
 // public/assets/city/npc/people.{json,bin}) rendered as instanced meshes with GPU skinning from a baked animation
 // texture (18 bones, 14 clips, per-instance clip cross-fades + head look-at), 3 LODs, per-instance outfit colours.
@@ -11,6 +12,7 @@
 //    wave, cheer, point, clap; they step back when he lands close, dodge when he walks into them; world.alarm()
 //    makes them cower/flee.
 import * as THREE from 'three';
+import { getQuality } from '../../render/quality.js';
 import { G, mulberry32, streetsAt, inPark, shoreX, VMAP, MAPS, vmapAt } from '../layout.js'; // (layout2 r3) VMAP, vmapAt: Village walkers
 import { PARK_MEADOWS, meadowDist } from '../trees.js';
 import { tsCrowdSpots } from '../timessq.js'; // + timessq: static Times Square plaza crowd
@@ -19,13 +21,14 @@ import { PARK_CROWD_SPOTS } from '../park.js'; // (peds r6) lawn + park-edge peo
 import { GC_CROWD_SPOTS } from '../grandcentral.js'; // (street r7) Park Av podium roof garden + colonnade people
 import { perf2Off } from '../tilebatch.js'; // (perf r2) A/B switch
 
-const RP = 270;                 // sidewalk population radius around the camera
+const MOBILE = !!getQuality().mobile;
+const RP = MOBILE ? 210 : 270;                 // sidewalk population radius around the camera
 const RNEAR = [120, 160]; /* (street r10) 95/135 -> 120/160 (director: 'many more pedestrians') */        // (street r8) 70/110 -> 95/135: denser sidewalks seen from swing height. near tier (extra walkers + crosswalk corner crowds): populate / release block distance
 const NEAR_KILL = 175; /* (street r10) */ /* (street r8) 125 -> 150 */          // near-tier agents despawn beyond this camera distance
 const PCELL = 48;               // park streaming cell size
 const RPARK = [210, 250];       // park cell populate / release distance; park agents despawn beyond RPARK[1]
-const LOD_D = [24, 70, 300];    // LOD0 / LOD1 / LOD2 max distance
-const LOD_MAX = [110, 320, 1100];
+const LOD_D = MOBILE ? [24, 60, 220] : [24, 70, 300];    // LOD0 / LOD1 / LOD2 max distance
+const LOD_MAX = MOBILE ? [80, 220, 650] : [110, 320, 1100];
 const SLICE2 = !perf2Off('nocrowdopt'); // (perf r2) finer sim time-slicing + cached heights (?nocrowdopt: old path)
 const SPEED_WALK = [0.95, 1.4]; // (peds r2) with the measured clip strides: playback 0.85-1.25 (critic: lockstep / sliding)
 const STRIDE = 1.5;             // metres per walk cycle at scale 1 (clip 'walk' is 32 frames @30fps)
@@ -683,10 +686,10 @@ function createBlobs(scene, animTex, meta) {
 // ------------------------------------------------------------------ crowd
 export async function createCrowd({ scene, blocks, parkPaths, props, roads, phase }) {
   const [meta, bin, pedTex, bakeTex] = await Promise.all([
-    fetch('/assets/city/npc/people.json').then(r => r.json()),
-    fetch('/assets/city/npc/people.bin').then(r => r.arrayBuffer()),
-    new THREE.TextureLoader().loadAsync('/assets/city/tex/peds_atlas.webp').catch(() => null), // (peds r1) faces / hair / fabric
-    new THREE.TextureLoader().loadAsync('/assets/city/npc/people_bake.webp').catch(() => null), // (peds r2) Cycles cloth normal + AO
+    fetch(assetUrl('/assets/city/npc/people.json')).then(r => r.json()),
+    fetch(assetUrl('/assets/city/npc/people.bin')).then(r => r.arrayBuffer()),
+    new THREE.TextureLoader().loadAsync(assetUrl('/assets/city/tex/peds_atlas.webp')).catch(() => null), // (peds r1) faces / hair / fabric
+    new THREE.TextureLoader().loadAsync(assetUrl('/assets/city/npc/people_bake.webp')).catch(() => null), // (peds r2) Cycles cloth normal + AO
   ]);
   if (bakeTex) { bakeTex.flipY = false; bakeTex.colorSpace = THREE.NoColorSpace; bakeTex.anisotropy = 4; bakeTex.needsUpdate = true; }
   const useBake = !!bakeTex && !!meta.bake && meta.variants[0]?.lods[0]?.uv !== undefined;

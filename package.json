@@ -3,9 +3,16 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "vite --port 5173 --host 127.0.0.1",
+    "dev": "vite --port 5173 --host 0.0.0.0",
     "build": "vite build",
-    "preview": "vite preview --port 4173 --host 127.0.0.1"
+    "preview": "vite preview --port 4173 --host 0.0.0.0",
+    "build:cdn": "node scripts/build-cdn.mjs",
+    "publish:cdn": "node scripts/publish-cdn.mjs",
+    "test": "node --test tests/*.test.mjs",
+    "test:browser": "playwright test",
+    "audio:aac": "node scripts/audio-aac.mjs",
+    "test:cdn": "node scripts/smoke-cdn.mjs",
+    "archive:cdn": "node scripts/archive-cdn.mjs"
   },
   "dependencies": {
     "n8ao": "^2.0.1",
@@ -13,6 +20,8 @@
     "three": "^0.186.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.63.0",
+    "sharp": "^0.35.5",
     "vite": "^8.3.0"
   }
 }

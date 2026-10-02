@@ -1,5 +1,6 @@
 // OWNER: city agent. Small immediate-mode mesh builder (positions/normals/colors/uv + optional per-vertex "part").
 import * as THREE from 'three';
+import { GrowBuffer } from './buffer.js';
 
 const _m = new THREE.Matrix4();
 const _v = new THREE.Vector3();
@@ -7,7 +8,7 @@ const _n = new THREE.Vector3();
 const _nm = new THREE.Matrix3();
 
 export class MB {
-  constructor() { this.p = []; this.n = []; this.c = []; this.uv = []; this.part = []; this.i = []; this.v = 0; this.color = [1, 1, 1]; this.curPart = 0; this.xf = null; }
+  constructor() { this.p = new GrowBuffer(); this.n = new GrowBuffer(); this.c = new GrowBuffer(); this.uv = new GrowBuffer(); this.part = new GrowBuffer(); this.i = new GrowBuffer(Uint32Array); this.v = 0; this.color = [1, 1, 1]; this.curPart = 0; this.xf = null; }
   setColor(c) { this.color = Array.isArray(c) ? c : [((c >> 16) & 255) / 255, ((c >> 8) & 255) / 255, (c & 255) / 255].map(s => Math.pow(s, 2.2)); return this; }
   setPart(k) { this.curPart = k; return this; }
   setXf(m) { this.xf = m; return this; }
@@ -73,20 +74,22 @@ export class MB {
   with(m, fn) { const prev = this.xf; this.xf = prev ? prev.clone().multiply(m) : m; fn(this); this.xf = prev; return this; }
   merge(other) {
     const off = this.v;
-    this.p.push(...other.p); this.n.push(...other.n); this.c.push(...other.c); this.uv.push(...other.uv); this.part.push(...other.part);
+    for (const key of ['p', 'n', 'c', 'uv', 'part']) for (const value of other[key]) this[key].push(value);
     for (const k of other.i) this.i.push(k + off);
     this.v += other.v;
     return this;
   }
-  build({ part = false } = {}) {
+  release() { for (const k of ['p', 'n', 'c', 'uv', 'part', 'i']) { this[k].a = new this[k].Type(0); this[k].length = 0; } this.v = 0; }
+  build({ part = false, consume = false } = {}) {
     const g = new THREE.BufferGeometry();
-    g.setAttribute('position', new THREE.Float32BufferAttribute(this.p, 3));
-    g.setAttribute('normal', new THREE.Float32BufferAttribute(this.n, 3));
-    g.setAttribute('color', new THREE.Float32BufferAttribute(this.c, 3));
-    g.setAttribute('uv', new THREE.Float32BufferAttribute(this.uv, 2));
-    if (part) g.setAttribute('aPart', new THREE.Float32BufferAttribute(this.part, 1));
-    g.setIndex(this.v > 65535 ? new THREE.Uint32BufferAttribute(this.i, 1) : new THREE.Uint16BufferAttribute(this.i, 1));
+    g.setAttribute('position', new THREE.BufferAttribute(this.p.take(), 3));
+    g.setAttribute('normal', new THREE.BufferAttribute(this.n.take(), 3));
+    g.setAttribute('color', new THREE.BufferAttribute(this.c.take(), 3));
+    g.setAttribute('uv', new THREE.BufferAttribute(this.uv.take(), 2));
+    if (part) g.setAttribute('aPart', new THREE.BufferAttribute(this.part.take(), 1));
+    g.setIndex(new THREE.BufferAttribute(this.i.take(this.v > 65535 ? Uint32Array : Uint16Array), 1));
     g.computeBoundingSphere(); g.computeBoundingBox();
+    if (consume) this.release();
     return g;
   }
 }

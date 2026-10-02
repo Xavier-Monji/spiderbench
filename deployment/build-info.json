@@ -1,0 +1,11 @@
+{
+  "base": "https://cdn.jsdelivr.net/gh/Xavier-Monji/spiderbench@1024c11264ac99bd1b89d7326e15627c5937e741/dist/",
+  "buildBase": "./",
+  "quality": "mobile",
+  "entry": "https://cdn.jsdelivr.net/gh/Xavier-Monji/spiderbench@1024c11264ac99bd1b89d7326e15627c5937e741/dist/index.html",
+  "launcherBytes": 711,
+  "dataUriBytes": 984,
+  "published": false,
+  "commit": "1024c11264ac99bd1b89d7326e15627c5937e741",
+  "artifactBytes": 103076775
+}

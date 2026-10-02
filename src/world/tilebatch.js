@@ -111,8 +111,10 @@ export function batchTiles(geoms, material, name, o = {}, centers = []) {
     warm(i) {
       const t = tile[i]; if (!t || NOWARM) return false;
       const g = t.m.geometry;
+      if (g.userData.streaming && !g.userData.streaming.ready) { t.wq = null; return false; }
+      if (g.userData.streaming && t.wver !== g.userData.streaming.version) { t.wq = null; t.wver = g.userData.streaming.version; }
       if (!t.wq) t.wq = [...Object.keys(g.attributes), g.index ? '#index' : null].filter(Boolean);
-      if (!t.wq.length) return false;
+      if (!t.wq.length) { if (g.userData.streaming) g.userData.streaming.gpuReady = true; return false; }
       const k = t.wq.shift();
       for (const n of Object.keys(upG.attributes)) upG.deleteAttribute(n);
       upG.setIndex(null);
@@ -122,6 +124,14 @@ export function batchTiles(geoms, material, name, o = {}, centers = []) {
       return true;
     },
     endWarm,
+    // Only independent tiles can be evicted: merged tiles share buffers with their super-tile/neighbours.
+    releaseGpu(i) {
+      const t = tile[i]; if (!t || t.grp.tiles.length !== 1) return;
+      t.m.geometry.dispose(); t.wq = null;
+    },
+    sphere: (i) => tile[i]?.m.geometry.boundingSphere,
+    hasDrawReady: (i) => { const s = tile[i]?.m.geometry.userData.streaming; return !!tile[i] && (!s || (s.ready && s.gpuReady)); },
+    hasReady: (i) => !!tile[i] && (tile[i].m.geometry.userData.streaming?.ready ?? true),
     has: (i) => !!tile[i],
     setVisible(i, v) { const t = tile[i]; if (!t || t.vis === v) return; t.vis = v; resolve(t.grp); },
     setShadow(i, v) { const t = tile[i]; if (!t || t.sh === v) return; t.sh = v; resolve(t.grp); },

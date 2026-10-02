@@ -19,15 +19,20 @@ import { SHOTS } from './shots.js';
 import { createWarmup } from './render/warmup.js'; // (perf r3)
 import { REFL_LAYER } from './world/water.js';
 import { BIG_CASTER_LAYER } from './render/csm.js';
+import { getQuality } from './render/quality.js';
+import { assetUrl } from './platform/assets.js';
+import { createResolutionController } from './render/resolution.js';
+import { createTouchControls } from './ui/touch-controls.js';
 
 const params = new URLSearchParams(location.search);
 const shotName = params.get('shot');
 // loading screen (index.html): stage labels + progress; it fades out once the first frames and the game systems are up
 const boot = window.__boot || { stage: async () => {}, sub() {}, done() {} };
 
+const quality = getQuality();
+THREE.DefaultLoadingManager.setURLModifier(assetUrl);
 const renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'high-performance', stencil: false, reversedDepthBuffer: true });
-renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5));
-renderer.setSize(innerWidth, innerHeight);
+const resolution = createResolutionController(renderer, quality);
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -47,7 +52,7 @@ document.body.appendChild(renderer.domElement);
 const scene = new THREE.Scene();
 // far plane 150 km (foundation agent): the harbour, far shores and distant hinterland run out to the (fogged) true
 // horizon instead of being clipped into a hard band at 6 km (reversed float depth keeps precision at this range)
-const camera = new THREE.PerspectiveCamera(55, innerWidth / innerHeight, 0.1, 150000);
+const camera = new THREE.PerspectiveCamera(55, innerWidth / innerHeight, 0.1, quality.cameraFar ?? 150000);
 
 const lighting = createLighting({ renderer, scene });
 const world = await buildCity({ scene, renderer });
@@ -57,23 +62,44 @@ const player = await createPlayer({ scene, world, camera, input, renderer });
 await boot.stage('shaders');
 const hud = createHud({ player, world, camera });
 const pipeline = createPipeline({ renderer, scene, camera, lighting });
+resolution.attach(pipeline);
 
-addEventListener('resize', () => {
-  camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix();
-  renderer.setSize(innerWidth, innerHeight); pipeline.setSize(innerWidth, innerHeight);
-});
+const resize = () => {
+  camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); resolution.resize();
+};
+addEventListener('resize', resize);
+window.visualViewport?.addEventListener('resize', resize);
 
-const ctx = { THREE, renderer, scene, camera, lighting, world, player, hud, pipeline, input };
+const ctx = { THREE, renderer, scene, camera, lighting, world, player, hud, pipeline, input, quality, resolution };
 ctx.systems = ctx.systems || []; // C5: game systems (src/game/**) push {update(dt)} here
 window.__ctx = ctx;
+const touchControls = ctx.touchControls = createTouchControls(ctx);
+if (touchControls) ctx.systems.push(touchControls);
+// Release latched gestures and stop GPU submissions while Safari suspends the tab or loses the GL context.
+let contextLost = false;
+const contextMessage = document.createElement('button');
+contextMessage.textContent = 'Graphics context interrupted — tap to reload if it does not recover.';
+contextMessage.style.cssText = 'display:none;position:fixed;inset:35% 10%;z-index:1100;background:#091325;color:white;border:1px solid #e3262f;border-radius:12px;padding:24px;font:16px system-ui';
+contextMessage.addEventListener('click', () => location.reload()); document.body.appendChild(contextMessage);
+renderer.domElement.addEventListener('webglcontextlost', e => { e.preventDefault(); contextLost = true;
+  input.clear(); touchControls?.clear(); resolution.reset(); contextMessage.style.display = 'block'; });
+renderer.domElement.addEventListener('webglcontextrestored', () => { contextLost = false;
+  pipeline.resetHistory?.(); resolution.resize(); contextMessage.style.display = 'none'; });
+document.addEventListener('visibilitychange', () => { input.clear(); touchControls?.clear(); resolution.reset(); });
 // (perf r3) queue every shader program the game can draw (main pass + the river mirror's unshadowed variant + the
 // post passes) before the first frame: they link in parallel on the driver's threads during the loading frame instead
 // of one by one later, each freezing the game for 0.2-6 s the first time its material came into view
 // (render/warmup.js). ?nowarm = old behaviour (A/B)
-const warmup = !shotName && !params.has('nowarm') ? createWarmup(renderer, scene, camera, { mirrorLayers: [REFL_LAYER, BIG_CASTER_LAYER] }) : null;
+const warmup = !shotName && !params.has('nowarm') ? createWarmup(renderer, scene, camera, { mirrorLayers: quality.mobile ? null : [REFL_LAYER, BIG_CASTER_LAYER], perStep: quality.mobile ? 2 : 4 }) : null;
 // first the state the first frame would set that is part of the program keys: the sky IBL (scene.environment, from the
 // first lighting update) and the pipeline's NO_SSR material defines
-if (warmup) { lighting.update(camera); pipeline.prepareMaterials?.(); warmup.rescan(); warmup.flush(); await warmup.settle(k => boot.sub(k)); }
+if (warmup) {
+  lighting.update(camera); pipeline.prepareMaterials?.(); warmup.rescan();
+  if (quality.mobile) { // yield between small compile batches instead of one large synchronous flush
+    while (warmup.pending) { warmup.step(true); await new Promise(r => setTimeout(r, 0)); }
+  } else warmup.flush();
+  await warmup.settle(k => boot.sub(k));
+}
 await boot.stage('frame');
 let framesDrawn = 0;
 const systemsReady = shotName ? Promise.resolve() : import('./game/systems/index.js').then(m => m.initSystems(ctx)).catch(e => console.error('[systems] init failed', e)) // open-world systems (C5)
@@ -98,7 +124,8 @@ if (shotName) {
   window.__shotInfo = `${renderer.info.render.calls} calls, ${renderer.info.render.triangles} tris`;
   window.__shotReady = true;
 } else {
-  const clock = new THREE.Clock();
+  let lastFrame = null, nextFrame = 0;
+  const interval = quality.targetFps ? 1000 / quality.targetFps : 0;
   function frame(realDt) {
     ctx.realDt = realDt;
     const dt = ctx.realDt * (ctx.timeScale ?? 1);
@@ -111,8 +138,12 @@ if (shotName) {
   // tools (tools/film.mjs): ctx.manualStep = true pauses the real-time loop; ctx.stepFrame(dt) then advances exactly one
   // frame of dt seconds (deterministic frame-by-frame captures of fast motion)
   ctx.stepFrame = dt => frame(dt);
-  renderer.setAnimationLoop(() => {
-    const d = Math.min(clock.getDelta(), 1 / 20);
-    if (!ctx.manualStep) frame(d);
+  renderer.setAnimationLoop(now => {
+    if (document.hidden || contextLost || ctx.manualStep) { lastFrame = null; nextFrame = 0; return; }
+    if (interval && now + 0.75 < nextFrame) return;
+    const realDt = lastFrame == null ? 1 / (quality.targetFps || 60) : (now - lastFrame) / 1000;
+    lastFrame = now; nextFrame = now + interval;
+    if (framesDrawn > 90 && ctx.flow?.isPlaying) resolution.observeFrame(realDt);
+    frame(Math.min(realDt, 1 / 20));
   });
 }

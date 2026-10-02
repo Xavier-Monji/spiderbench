@@ -1,3 +1,4 @@
+import { assetUrl } from '../platform/assets.js';
 // OWNER: rooftops agent. Rooftop fabric seen from swinging altitude (refs/city/manhattan_02/03/06):
 //  - roof "skins": a textured surface (tar, ballast gravel, white/grey membrane, red / silver coatings, black EPDM, pavers,
 //    timber deck, sedum, lawn) laid 6 mm over every exposed roof of every building (incl. setback terraces), with
@@ -15,6 +16,8 @@
 // Contract: buildRooftops({ scene, gen, facadeMat, T }) -> Promise<{ update(camera), stats }>. Must run BEFORE the tile
 // facade meshes are built (it appends to gen.tiles' builders) and before props (props avoid our solids).
 import * as THREE from 'three';
+import { getQuality } from '../render/quality.js';
+import { deferredBuilder } from './streaming.js';
 import { mulberry32, district, blockAt, ZFIX } from './layout.js';
 import { STYLE, LAYER } from './facade.js';
 import { KIND } from './collision.js';
@@ -199,12 +202,12 @@ function createRoofMaterial(tc, tn, noise) {
 class FBuf {
   constructor(T = Float32Array, n = 1024) { this.T = T; this.a = new T(n); this.length = 0; }
   push(...v) {
-    if (this.length + v.length > this.a.length) { const b = new this.T(Math.max(this.a.length * 2, this.length + v.length)); b.set(this.a); this.a = b; }
+    if (this.length + v.length > this.a.length) { const b = new this.T(Math.max(Math.ceil(this.a.length * 1.5), this.length + v.length)); b.set(this.a); this.a = b; }
     for (let k = 0; k < v.length; k++) this.a[this.length++] = v[k];
   }
   out(T = this.T) { return T === this.T ? this.a.slice(0, this.length) : T.from(this.a.subarray(0, this.length)); }
 }
-class RB {
+export class RB {
   constructor() { this.p = new FBuf(); this.n = new FBuf(); this.uv = new FBuf(); this.c = new FBuf(); this.m = new FBuf(); this.e = new FBuf(); this.i = new FBuf(Uint32Array); this.v = 0; }
   _v(x, y, z, nx, ny, nz, u, v, col, M, E) {
     this.p.push(x, y, z); this.n.push(nx, ny, nz); this.uv.push(u, v); this.c.push(col[0], col[1], col[2]);
@@ -529,9 +532,10 @@ const FAM_WARM = [1.02, 0.99, 0.94], FAM_COOL = [0.92, 0.96, 1.0], FAM_N = [1, 1
 
 // ------------------------------------------------------------------------------------------ main
 export async function buildRooftops({ scene, gen, facadeMat, T, renderer, extraRoofs = [] }) {
+  const Q = getQuality(), facadeNear = Q.facadeNear ?? 650;
   void facadeMat;
-  const aniso = Math.min(8, renderer?.capabilities?.getMaxAnisotropy?.() ?? 4);
-  const [imC, imN] = await Promise.all([loadImage('/assets/city/tex/roof_col.png'), loadImage('/assets/city/tex/roof_nrm.png')]);
+  const aniso = Math.min(Q.textureAnisotropy ?? 8, renderer?.capabilities?.getMaxAnisotropy?.() ?? 4);
+  const [imC, imN] = await Promise.all([loadImage(assetUrl('/assets/city/tex/roof_col.png')), loadImage(assetUrl('/assets/city/tex/roof_nrm.png'))]);
   const mat = createRoofMaterial(arrayTex(imC, true, aniso), arrayTex(imN, false, aniso), T.noise);
   const aoMat = new THREE.MeshBasicMaterial({ vertexColors: true, blending: THREE.MultiplyBlending, premultipliedAlpha: true, transparent: true,
     depthWrite: false, toneMapped: false, fog: false });
@@ -542,7 +546,14 @@ export async function buildRooftops({ scene, gen, facadeMat, T, renderer, extraR
   const tileOf = (x, z) => {
     const k = `${Math.floor(x / TILE)},${Math.floor(z / TILE)}`;
     let t = tiles.get(k);
-    if (!t) { t = { rb: new RB(), ao: new AOB(), sk: new StreakB(), key: k, cx: (Math.floor(x / TILE) + 0.5) * TILE, cz: (Math.floor(z / TILE) + 0.5) * TILE }; tiles.set(k, t); }
+    if (!t) {
+      const cx = (Math.floor(x / TILE) + 0.5) * TILE, cz = (Math.floor(z / TILE) + 0.5) * TILE;
+      const rb = Q.mobile ? deferredBuilder(RB, { methods: ['skin', 'box', 'obox', 'disc', 'cyl', 'lathe'], role: 'roof', cx, cz, range: facadeNear,
+        returns: { skin: (...args) => RB.prototype.skin.call({ _v: () => 0, i: { push() {} } }, ...args) } }) : new RB();
+      const ao = Q.mobile ? deferredBuilder(AOB, { methods: ['ring', 'band'], role: 'roofAO', cx, cz, range: 320 }) : new AOB();
+      const sk = Q.mobile ? deferredBuilder(StreakB, { methods: ['wall'], role: 'roofStreaks', cx, cz, range: 460 }) : new StreakB();
+      t = { rb, ao, sk, key: k, cx, cz }; tiles.set(k, t);
+    }
     return t;
   };
   const crowns = new CanopyBatch(4242, { squash: 0.8 }); // yard trees (lumpy blobs, shadows)
@@ -686,6 +697,7 @@ export async function buildRooftops({ scene, gen, facadeMat, T, renderer, extraR
       const glassTop = (type === 'glass' && isTop && m.parapet === 0) || !!scrPre;
       const lower = !isTop;                                    // setback terrace / podium roof
       st.roofs++;
+      if (st.roofs % 1000 === 0 && new URLSearchParams(location.search).has('memlog')) console.log('[roof:progress]', st.roofs, S.count, performance.memory?.usedJSHeapSize);
       const skins = []; // this roof's skins
       let aoDeck = null; // plant-room roof (contact AO clip rect)
       // ---- terrace zone (deck / pavers / sedum / lawn) on residential and setback roofs, on the street-facing end
@@ -2208,6 +2220,7 @@ export async function buildRooftops({ scene, gen, facadeMat, T, renderer, extraR
 
   // ---- rear yards (block interiors): ground cover, fences, sheds, trees
   yards(gen, occ, S, tileOf, crowns, st);
+  if (Q.mobile) occ.h.clear(); // occupancy is construction-only; the update closure otherwise retains its cells
 
   // ---- meshes: one per tile, shown with the full-detail facade tiles (same nearest-point distance + hysteresis)
   // (perf) roof AO / streak decals grouped into 2x2 super-tiles (tilebatch.js): one draw per super-tile while all its
@@ -2225,8 +2238,8 @@ export async function buildRooftops({ scene, gen, facadeMat, T, renderer, extraR
   }
   const ctr = meshes.map(t => [t.cx, t.cz]);
   const rbB = batchTiles(rbG, mat, 'roofs', { castShadow: true, receiveShadow: true, smallCasters: true, merge: false }, ctr); // csm: keep out of the far cascades
-  const aoB = batchTiles(aoG, aoMat, 'roofAO', { renderOrder: 1 }, ctr);
-  const skB = batchTiles(skG, skMat, 'roofStreaks', { renderOrder: 1 }, ctr);
+  const aoB = batchTiles(aoG, aoMat, 'roofAO', { renderOrder: 1, merge: !Q.mobile }, ctr);
+  const skB = batchTiles(skG, skMat, 'roofStreaks', { renderOrder: 1, merge: !Q.mobile }, ctr);
   for (const b of [rbB, aoB, skB]) for (const m of b.meshes) scene.add(m);
   if (crowns.count) crowns.build(scene, 'roof-trees', true, { tile: TILE * 2, smallCasters: true }); // (perf) 512 m batches: ~65 -> ~20 draws per pass
   plants.build(scene); st.plants = plants.count; st.roofTrees = roofTrees.length; // (veg r1)
@@ -2250,11 +2263,18 @@ export async function buildRooftops({ scene, gen, facadeMat, T, renderer, extraR
       pm.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse); fr.setFromProjectionMatrix(pm);
       for (const tm of meshes) {
         const d = Math.hypot(Math.max(0, Math.abs(p.x - tm.cx) - 128), Math.max(0, Math.abs(p.z - tm.cz) - 128));
-        const near = tm.near ? d < 690 : d < 650; tm.near = near;
-        rbB.setVisible(tm.i, near); rbB.setShadow(tm.i, d < 230); // (perf) batched tiles
-        if (!warmed && !near && !tm.warm && d < 850) { sp.center.set(tm.cx, 60, tm.cz); sp.radius = 200; if (fr.intersectsSphere(sp)) { if (rbB.warm(tm.i)) warmed = true; else tm.warm = true; } }
-        if (tm.ao) aoB.setVisible(tm.i, d < 520);
-        if (tm.sk) skB.setVisible(tm.i, d < 690);
+        const near = tm.near ? d < facadeNear + 40 : d < facadeNear; tm.near = near;
+        rbB.setVisible(tm.i, near && rbB.hasDrawReady(tm.i)); rbB.setShadow(tm.i, !Q.mobile && d < 230);
+        if (Q.mobile && !rbB.hasReady(tm.i)) tm.warm = false;
+        if (!warmed && (Q.mobile || !near) && !tm.warm && d < facadeNear + 200) {
+          sp.center.set(tm.cx, 60, tm.cz); sp.radius = 200;
+          if (fr.intersectsSphere(rbB.sphere(tm.i) || sp)) {
+            if (rbB.hasReady(tm.i) && rbB.warm(tm.i)) { warmed = true; tm.gpu = true; }
+            else if (rbB.hasReady(tm.i)) tm.warm = true;
+          }
+        }
+        if (tm.ao) aoB.setVisible(tm.i, d < (Q.mobile ? 320 : 520) && (!Q.mobile || rbB.hasDrawReady(tm.i)));
+        if (tm.sk) skB.setVisible(tm.i, d < (Q.mobile ? 460 : 690));
       }
     },
   };

@@ -1,3 +1,4 @@
+import { assetUrl } from '../platform/assets.js';
 // OWNER: city agent (veg r1). Natural tree trunks + limbs for trees.js: one continuous tapered, leaning, gently bent
 // trunk (swept tube along a Catmull-Rom spline) with a buttressed root flare sunk into the ground, a leader that runs
 // on into the main crown lobe, and scaffold limbs / branches / twigs that PEEL OFF their parent (each starts on the
@@ -215,7 +216,7 @@ function arrayTexFromStrip(url, srgb, fill) {
   };
   const u = { value: mk(new Uint8Array(4 * 4 * 4 * 3).fill(fill), 4, 4, 3) };
   if (typeof Image === 'undefined') return u;
-  const im = new Image();
+  const im = new Image(); im.crossOrigin = 'anonymous';
   im.onload = () => {
     const size = im.width, layers = Math.round(im.height / im.width);
     const cv = document.createElement('canvas'); cv.width = size; cv.height = im.height;
@@ -228,7 +229,7 @@ function arrayTexFromStrip(url, srgb, fill) {
   return u;
 }
 export function barkTextures() {
-  BARK_TEX ??= { col: arrayTexFromStrip('/assets/city/tex/bark_col.webp', true, 110), nrm: arrayTexFromStrip('/assets/city/tex/bark_nrm.webp', false, 128) };
+  BARK_TEX ??= { col: arrayTexFromStrip(assetUrl('/assets/city/tex/bark_col.webp'), true, 110), nrm: arrayTexFromStrip(assetUrl('/assets/city/tex/bark_nrm.webp'), false, 128) };
   return BARK_TEX;
 }
 // per-instance aBark = (layer, tint r, g, b)

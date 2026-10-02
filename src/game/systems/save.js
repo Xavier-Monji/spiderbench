@@ -27,13 +27,20 @@ export function defaultState() {
 
 export function createSave() {
   const q = new URLSearchParams(location.search);
-  const persistent = (!q.has('playtest') && !q.has('shot')) || q.has('save');
+  const wantsStorage = (!q.has('playtest') && !q.has('shot')) || q.has('save');
+  let storage = null;
+  if (wantsStorage) try {
+    storage = globalThis.localStorage;
+    // Opaque data: origins (and disabled/quota-full storage) must be genuinely in-memory, not just catch reads.
+    storage.setItem(KEY + '.probe', '1'); storage.removeItem(KEY + '.probe');
+  } catch { storage = null; }
+  const persistent = !!storage;
   let state = defaultState();
-  if (q.has('newgame')) { try { localStorage.removeItem(KEY); } catch {} }
+  if (q.has('newgame')) { try { storage?.removeItem(KEY); } catch {} }
   if (persistent) {
     try {
-      if (localStorage.getItem(KEY) == null) for (const k of OLD_KEYS) { const o = localStorage.getItem(k); if (o != null) { localStorage.setItem(KEY, o); localStorage.removeItem(k); break; } }
-      const raw = localStorage.getItem(KEY);
+      if (storage.getItem(KEY) == null) for (const k of OLD_KEYS) { const o = storage.getItem(k); if (o != null) { storage.setItem(KEY, o); storage?.removeItem(k); break; } }
+      const raw = storage.getItem(KEY);
       if (raw) {
         const s = JSON.parse(raw);
         if (s && s.v === 1) state = { ...defaultState(), ...s, settings: { ...DEFAULT_SETTINGS, ...(s.settings || {}) }, crimes: { ...defaultState().crimes, ...(s.crimes || {}) } };
@@ -48,9 +55,9 @@ export function createSave() {
   function writeNow() {
     timer = 0;
     if (!persistent) return;
-    try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {
+    try { storage.setItem(KEY, JSON.stringify(state)); } catch (e) {
       // quota: drop thumbnails first
-      try { state.photoThumbs = {}; localStorage.setItem(KEY, JSON.stringify(state)); } catch {}
+      try { state.photoThumbs = {}; storage.setItem(KEY, JSON.stringify(state)); } catch {}
     }
   }
   return {

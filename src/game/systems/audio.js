@@ -1,3 +1,4 @@
+import { assetUrl } from '../../platform/assets.js';
 // OWNER: systems engineer. (audio r1) File-based WebAudio: pre-rendered ambient cinematic score + tonal SFX, all made
 // offline by tools/audio/build.py (numpy synthesis, no samples; see tools/audio/README.md). Web / movement / combat / UI
 // taps are realistic foley (tools/audio/foley.py). No noise beds, no wind, no traversal whooshes: speed / height are felt
@@ -10,15 +11,19 @@
 // Buses: master -> {music (duck + pause low-pass), world (pause muffle) -> {sfx, ambience}, ui}; volumes from settings.
 // Loading is lazy (first user gesture), async and never blocks the game; calls before load are silently dropped.
 import * as THREE from 'three';
+import { getQuality } from '../../render/quality.js';
 import { nightK } from '../../render/daynight.js';
 
-const BASE = '/assets/audio/';
+const BASE = assetUrl('/assets/audio/');
 const STEMS = ['day', 'night', 'pulseA', 'pulseB'];
 const SPRITE_BUS = { trav: 'sfx', combat: 'sfx', ui: 'ui', world: 'ambience' };
 const clamp = THREE.MathUtils.clamp;
 const sstep = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
 
 export function createAudio() {
+  const mobile = !!getQuality().mobile;
+  const vorbis = !!document.createElement('audio').canPlayType('audio/ogg; codecs=vorbis');
+  const audioUrl = url => assetUrl(vorbis ? url : url.replace(/\.ogg$/, '.m4a'));
   const AC = window.AudioContext || window.webkitAudioContext;
   let ac = null, ready = false, man = null, master, comp, muffle, musicLP, musicDuck, loadErr = null;
   const vol = { master: 1, music: 0.7, sfx: 0.7, ambience: 0.7, ui: 0.7 };
@@ -53,13 +58,20 @@ export function createAudio() {
     ready = true;
     load();
   }
-  const resume = () => { init(); if (ac && ac.state !== 'running') ac.resume().catch(() => {}); };
+  const resume = () => {
+    init(); if (ac && ac.state !== 'running') ac.resume().catch(() => {});
+    for (const layer of Object.values(music.layer)) if (layer.audio?.paused && !document.hidden) layer.audio.play().catch(() => {});
+  };
+  document.addEventListener('visibilitychange', () => {
+    for (const layer of Object.values(music.layer)) { if (document.hidden) layer.audio?.pause(); else layer.audio?.play().catch(() => {}); }
+    if (document.hidden) ac?.suspend().catch(() => {}); else if (ready) ac?.resume().catch(() => {});
+  });
   for (const ev of ['pointerdown', 'keydown', 'touchstart']) addEventListener(ev, resume, { capture: true, passive: true });
 
   // ------------------------------------------------------------------ loading (lazy, async, never blocking)
   async function fetchBuf(url, tries = 3) {
     for (let i = 0; i < tries; i++) {
-      try { const r = await fetch(url); if (!r.ok) throw new Error(r.status + ' ' + url); return await ac.decodeAudioData(await r.arrayBuffer()); }
+      try { const r = await fetch(audioUrl(url)); if (!r.ok) throw new Error(r.status + ' ' + url); return await ac.decodeAudioData(await r.arrayBuffer()); }
       catch (e) { if (i === tries - 1) throw e; await new Promise(r => setTimeout(r, 400 * (i + 1))); }
     }
   }
@@ -69,12 +81,25 @@ export function createAudio() {
       // small sprites first (UI / traversal are heard right away), then the loops, then the music stems
       await Promise.all(Object.entries(man.sprites).map(async ([k, s]) => { bufs[k] = await fetchBuf(s.url); }));
       await Promise.all(Object.entries(man.loops).map(async ([k, s]) => { lbufs[k] = await fetchBuf(s.url); }));
-      for (const k of STEMS) if (man.music[k]) mbufs[k] = await fetchBuf(man.music[k].url);
-      startMusic();
+      if (mobile) startStreamedMusic();
+      else { for (const k of STEMS) if (man.music[k]) mbufs[k] = await fetchBuf(man.music[k].url); startMusic(); }
     } catch (e) { loadErr = String(e?.message || e); console.warn('[audio] load failed:', loadErr); }
   }
 
   // ------------------------------------------------------------------ music
+  function startStreamedMusic() {
+    if (music.started) return;
+    music.t0 = now();
+    for (const k of STEMS) {
+      if (!man.music[k]) return;
+      const audio = new Audio(); audio.crossOrigin = 'anonymous'; audio.preload = 'metadata'; audio.loop = true;
+      audio.src = audioUrl(man.music[k].url);
+      const g = G(0), source = ac.createMediaElementSource(audio); source.connect(g).connect(bus.music);
+      music.layer[k] = { audio, s: source, g };
+      audio.play().catch(() => {}); // Safari may need the next gesture; resume() retries within that gesture.
+    }
+    music.started = true;
+  }
   function startMusic() {
     if (music.started || !STEMS.every(k => mbufs[k])) return;
     const t0 = now() + 0.25; music.t0 = t0;
@@ -239,6 +264,13 @@ export function createAudio() {
       music.dayG = Math.cos(music.night * Math.PI / 2) * bed; music.nightG = Math.sin(music.night * Math.PI / 2) * bed;
       music.aG = sstep(0.06, 0.45, music.I) * 0.95; music.bG = sstep(0.5, 0.92, music.I) * 0.9;
       const L = music.layer;
+      if (mobile && Math.floor(now()) % 8 === 0) {
+        const ref = L.day?.audio;
+        if (ref && ref.readyState >= 2 && !ref.paused) for (const k of STEMS) {
+          const a = L[k]?.audio;
+          if (a && a.readyState >= 2 && !a.paused && Math.abs(a.currentTime - ref.currentTime) > 0.12) a.currentTime = ref.currentTime;
+        }
+      }
       L.day.g.gain.setTargetAtTime(music.dayG, t, 0.15); L.night.g.gain.setTargetAtTime(music.nightG, t, 0.15);
       L.pulseA.g.gain.setTargetAtTime(music.aG, t, 0.2); L.pulseB.g.gain.setTargetAtTime(music.bG, t, 0.25);
     }
@@ -270,8 +302,8 @@ export function createAudio() {
   }
   function state() {
     const r3 = x => Math.round(x * 1000) / 1000;
-    return { ready, ctx: ac?.state || 'none', sr: ac?.sampleRate, loadErr, sprites: Object.keys(bufs), loops: Object.keys(lbufs), stems: Object.keys(mbufs),
-      music: { started: music.started, pos: music.started ? r3(((now() - music.t0) % (mbufs.day?.duration || 1))) : 0, I: r3(music.I), night: r3(music.night), day: r3(music.dayG), nightG: r3(music.nightG), pulseA: r3(music.aG), pulseB: r3(music.bG) },
+    return { ready, ctx: ac?.state || 'none', sr: ac?.sampleRate, loadErr, sprites: Object.keys(bufs), loops: Object.keys(lbufs), stems: mobile ? Object.keys(music.layer) : Object.keys(mbufs), streamedMusic: mobile,
+      music: { started: music.started, pos: music.started ? r3(((now() - music.t0) % (man?.music?.day?.dur || mbufs.day?.duration || 1))) : 0, I: r3(music.I), night: r3(music.night), day: r3(music.dayG), nightG: r3(music.nightG), pulseA: r3(music.aG), pulseB: r3(music.bG) },
       voices: [...voices.values()].reduce((a, v) => a + v.length, 0), activeLoops: loops.size };
   }
 

@@ -133,7 +133,7 @@ export function installSurfaceChunks(quality = {}) {
 }
 #endif
 `;
-  if (!SC.opaque_fragment.includes('ssrW')) SC.opaque_fragment = SC.opaque_fragment + add;
+  if (quality.ssr !== false && !SC.opaque_fragment.includes('ssrW')) SC.opaque_fragment = SC.opaque_fragment + add;
 
   // ---- ambient (diffuse IBL) grading + bounce GI approximation
   const env = SC.envmap_physical_pars_fragment;

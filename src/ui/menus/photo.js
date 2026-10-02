@@ -71,19 +71,23 @@ export function createPhotoUI(sys) {
     for (let i = st.stickers.length - 1; i >= 0; i--) { const k = st.stickers[i]; const r = (STICKER_R[k.id] || 100) * u * k.s; if (Math.hypot(cx - k.x * innerWidth, cy - k.y * innerHeight) < r) return k; }
     return null;
   }
-  catchEl.addEventListener('mousedown', e => {
+  catchEl.style.touchAction = 'none';
+  catchEl.addEventListener('pointerdown', e => {
+    if (e.isPrimary === false || !open) return;
+    if (e.pointerType !== 'mouse') e.preventDefault();
+    try { catchEl.setPointerCapture(e.pointerId); } catch {}
     const k = stickerAt(e.clientX, e.clientY);
-    if (k) { selSt = k; st.stickers.push(st.stickers.splice(st.stickers.indexOf(k), 1)[0]); drag = { x: e.clientX, y: e.clientY, st: k }; drawOverlay(); return; }
+    if (k) { selSt = k; st.stickers.push(st.stickers.splice(st.stickers.indexOf(k), 1)[0]); drag = { id: e.pointerId, x: e.clientX, y: e.clientY, st: k }; drawOverlay(); return; }
     if (selSt) { selSt = null; drawOverlay(); }
-    drag = { x: e.clientX, y: e.clientY };
+    drag = { id: e.pointerId, x: e.clientX, y: e.clientY };
   });
-  addEventListener('mousemove', e => {
-    if (!drag || !open) return;
+  addEventListener('pointermove', e => {
+    if (!drag || !open || drag.id !== e.pointerId) return;
     if (drag.st) { drag.st.x = Math.min(0.98, Math.max(0.02, drag.st.x + (e.clientX - drag.x) / innerWidth)); drag.st.y = Math.min(0.98, Math.max(0.02, drag.st.y + (e.clientY - drag.y) / innerHeight)); drawOverlay(); }
     else photo.look(e.clientX - drag.x, e.clientY - drag.y);
     drag = { ...drag, x: e.clientX, y: e.clientY };
   });
-  addEventListener('mouseup', () => { drag = null; });
+  for (const event of ['pointerup', 'pointercancel', 'blur']) addEventListener(event, () => { drag = null; });
   catchEl.addEventListener('wheel', e => { e.preventDefault(); if (selSt) { selSt.s = Math.min(3, Math.max(0.3, selSt.s * Math.exp(-e.deltaY * 0.0012))); drawOverlay(); return; } photo.set('fov', Math.max(15, Math.min(100, st.fov + Math.sign(e.deltaY) * 2))); if (tab === 'cam') render(); }, { passive: false });
   addEventListener('keyup', e => photo.keys.delete(e.code));
   flow.onKey((e, mode) => {

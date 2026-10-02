@@ -16,6 +16,7 @@
 // Frame: scene(HDR, jittered) -> sky(1/2 res) -> AO(N8AO) -> composite(sky+aerial perspective) -> TAA ->
 //        DoF -> motion blur -> bloom -> final(CA, sharpen, ACES, grade, vignette, dither) -> screen
 import * as THREE from 'three';
+import { createMobilePipeline } from './mobile-pipeline.js';
 import { N8AOPostPass } from 'n8ao';
 import { FSPass, makeRT, GLSL_DEPTH, GLSL_COLOR, halton } from './common.js';
 import { GLSL_SKY_COMMON } from './sky.js';
@@ -24,6 +25,7 @@ import { createGlassMirror } from './glassmirror.js'; // (render r-refl) player 
 
 export function createPipeline({ renderer, scene, camera, lighting }) {
   const Q = lighting.quality;
+  if (Q.mobile) return createMobilePipeline({ renderer, scene, camera, lighting });
   const reversed = !!renderer.capabilities.reversedDepthBuffer;
   const params = new URLSearchParams(location.search);
   const prof = new GpuProfiler(renderer, params.has('prof'));

@@ -1,3 +1,4 @@
+import { assetUrl } from '../platform/assets.js';
 // OWNER: systems / character. Advanced-suit fabric look (user r-suitfabric: "the spiderman main suit is shiny, flat red
 // and blue colours, make them rougher, and with good textures"). Target: Insomniac PS4/SM2 Advanced suit
 // (refs/suit/suit_closeup.png): matte-to-satin technical fabric, raised rubbery web lines + emblem a little glossier,
@@ -42,7 +43,7 @@ export function applySuitFabric(root) {
   let mat = null;
   root.traverse(o => { if (!o.isMesh) return; for (const m of [].concat(o.material)) if (m?.name === 'SpiderSuit') mat = m; });
   if (!mat || mat.userData.__patches?.has('suitFabric')) return mat;
-  if (!uniforms.uFabHex.value && loaded === 0) { loadDetail('/assets/tex/suit_weave_hex.png', 'uFabHex'); loadDetail('/assets/tex/suit_weave_knit.png', 'uFabKnit'); }
+  if (!uniforms.uFabHex.value && loaded === 0) { loadDetail(assetUrl('/assets/tex/suit_weave_hex.png'), 'uFabHex'); loadDetail(assetUrl('/assets/tex/suit_weave_knit.png'), 'uFabKnit'); }
   addShaderPatch(mat, 'suitFabric', sh => {
     Object.assign(sh.uniforms, uniforms);
     sh.vertexShader = sh.vertexShader

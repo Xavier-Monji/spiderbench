@@ -1,8 +1,10 @@
+import { assetUrl } from '../platform/assets.js';
 // OWNER: citygeo. Loads the baked city textures (tools/blender/city_textures.py) and builds array textures.
 // Colour maps are sRGB, every data map (normal/roughness, height/AO/weathering, noise) is linear; max anisotropy.
 import * as THREE from 'three';
+import { getQuality } from '../render/quality.js';
 
-const BASE = '/assets/city/tex/';
+const BASE = assetUrl('/assets/city/tex/');
 
 // Retries with back-off: under load Chromium can refuse a request (net::ERR_INSUFFICIENT_RESOURCES), which must not
 // abort the whole city build.
@@ -10,10 +12,10 @@ export function loadImageRetry(src, tries = 5) {
   return new Promise((res, rej) => {
     let n = 0;
     const attempt = () => {
-      const im = new Image();
+      const im = new Image(); im.crossOrigin = 'anonymous';
       im.onload = () => res(im);
       im.onerror = () => (++n < tries ? setTimeout(attempt, 250 * 2 ** n) : rej(new Error('texture failed to load: ' + src)));
-      im.src = src;
+      im.src = assetUrl(src);
     };
     attempt();
   });
@@ -67,11 +69,15 @@ function arrayFromImages(images, size, { srgb, aniso }) {
 }
 
 export async function loadCityTextures(renderer) {
-  const aniso = Math.min(16, renderer.capabilities.getMaxAnisotropy());
+  const Q = getQuality();
+  const aniso = Math.min(Q.textureAnisotropy ?? 16, renderer.capabilities.getMaxAnisotropy());
   const names = ['asphalt_col', 'asphalt_nrm', 'asphalt_macro', 'sidewalk_col', 'sidewalk_nrm', 'walls_col.jpg', 'walls_nrm.webp', 'walls_hao.jpg', 'curb_col.webp', 'asphalt_decals.webp', // (textures r2) nrm: lossless webp (was a 20 MB png); granite curb; (textures r3) road repair decals
     'interiors', 'signs', 'markings', 'leaves', 'grass_col', 'grass_nrm', 'water_nrm', 'noise', 'detail_nrm'];
-  const ims = Object.fromEntries(await Promise.all(names.map(async n => [n.replace(/\..*/, ''), await loadImage(n.includes('.') ? n : n + '.png')])));
-  const markRects = await (await fetch(BASE + 'markings.json')).json();
+  const ims = {}; let next = 0;
+  const worker = async () => { while (next < names.length) { const n = names[next++];
+    ims[n.replace(/\..*/, '')] = await loadImage(n.includes('.') ? n : n + '.png'); } };
+  await Promise.all(Array.from({ length: Q.mobile ? 3 : names.length }, worker));
+  const markRects = await (await fetch(assetUrl(BASE + 'markings.json'))).json();
   const T = {
     asphaltCol: tex(ims.asphalt_col, { srgb: true, aniso }),
     asphaltNrm: tex(ims.asphalt_nrm, { aniso }),
@@ -90,10 +96,10 @@ export async function loadCityTextures(renderer) {
     markRects,
   };
   // facade layers 0..7 + roofs 8..12 + (textures r2) 13 terracotta, 14 stucco, 15 red brick 2; hao layer 16 = grime decals
-  T.wallsCol = arrayFromImages([ims.walls_col], 1024, { srgb: true, aniso });
-  T.wallsNrm = arrayFromImages([ims.walls_nrm], 512, { srgb: false, aniso }); // (textures r2) 512/layer (webp, half the VRAM)
+  T.wallsCol = arrayFromImages([ims.walls_col], Q.mobile ? 512 : 1024, { srgb: true, aniso });
+  T.wallsNrm = arrayFromImages([ims.walls_nrm], Q.mobile ? 256 : 512, { srgb: false, aniso }); // (textures r2) 512/layer (webp, half the VRAM)
   T.asphaltDecals = tex(ims.asphalt_decals, { repeat: false, aniso }); // (textures r3) $imagegen asphalt repair decals (colour ratio x0.5, linear)
   T.curbCol = tex(ims.curb_col, { srgb: true, aniso }); // (textures r2) $imagegen granite curbstone (ground.js sidewalk material)
-  T.wallsHao = arrayFromImages([ims.walls_hao], 512, { srgb: false, aniso });
+  T.wallsHao = arrayFromImages([ims.walls_hao], Q.mobile ? 256 : 512, { srgb: false, aniso });
   return T;
 }

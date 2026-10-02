@@ -39,6 +39,7 @@ export function createFlow(ctx, { save }) {
   function setMode(m) {
     if (m === mode) return;
     const prev = mode; mode = m;
+    clearInput();
     if (m !== 'play') { try { document.exitPointerLock?.(); } catch {} }
     if (m === 'play') { cameraHook = null; clearInput(); }
     hud?.setVisible?.(m === 'play');

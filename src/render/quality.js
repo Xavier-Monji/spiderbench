@@ -1,5 +1,19 @@
-// OWNER: render agent. Quality presets selected with ?q=low|med|high (default high).
-const PRESETS = {
+// Desktop presets are unchanged. Touch/mobile/4 GB devices default to the bounded mobile profile.
+import { getDevice } from '../platform/device.js';
+
+export const PRESETS = {
+  mobile: {
+    name: 'mobile', mobile: true,
+    // Keep one nearby building-shadow map, sky IBL, material detail, clouds, bloom and FXAA.
+    cascades: 1, shadowMapSize: 1024, shadowFar: 140, splits: [0.1, 140], shadowTaps: 3,
+    charShadow: 0, ao: false, aoHalfRes: true, aoQuality: 'Performance',
+    ssr: false, ssgi: false, taa: false, shafts: false, wet: false, planarReflections: false,
+    cloudSteps: 10, cloudLightSteps: 2, cloudNoiseSize: 64, envSize: 64,
+    bloomLevels: 3, dofTaps: 0, mbSamples: 0, sharpen: 0.15,
+    pixelRatioCap: 1.25, renderScale: 0.85, minRenderScale: 0.6, maxBufferPixels: 1000000,
+    targetFps: 30, cameraFar: 6000, facadeNear: 420, detailFar: 240, worldFar: 2400,
+    propFar: 1000, textureAnisotropy: 4, collisionCell: 0.05,
+  },
   low: {
     name: 'low',
     cascades: 2, shadowMapSize: 1024, shadowFar: 500, splits: [0.1, 30, 500], shadowTaps: 5,
@@ -30,22 +44,26 @@ const PRESETS = {
   },
 };
 
-let _q = null;
+export function selectQuality({ search = '', device = getDevice(), launchQuality } = {}) {
+  const params = new URLSearchParams(search);
+  let name = params.get('q') || launchQuality || (device.constrained ? 'mobile' : 'high');
+  if (name === 'medium') name = 'med';
+  if (!Object.hasOwn(PRESETS, name)) name = device.constrained ? 'mobile' : 'high';
+  const q = { ...PRESETS[name], splits: [...PRESETS[name].splits], perf: !params.has('perfoff') };
+  // Desktop ablation tools remain available. Mobile's allocation/budget invariants cannot be undone by qset.
+  if (!q.mobile && params.get('qset')) {
+    for (const kv of params.get('qset').split(',')) {
+      const [k, v] = kv.split(':');
+      if (Object.hasOwn(q, k) && !['name', 'mobile', 'splits'].includes(k)) {
+        q[k] = v === 'true' ? true : v === 'false' ? false : isNaN(+v) ? v : +v;
+      }
+    }
+  }
+  return q;
+}
+
+let _q;
 export function getQuality() {
-  if (_q) return _q;
-  let name = 'high';
-  try {
-    const p = new URLSearchParams(location.search).get('q');
-    if (p && PRESETS[p]) name = p;
-    if (p === 'medium') name = 'med';
-  } catch (e) { /* non-browser */ }
-  _q = { ...PRESETS[name] };
-  // (perf) ?perfoff disables the perf agent's culling / batching changes (A/B measurements with tools/perf_probe.mjs)
-  try { _q.perf = !new URLSearchParams(location.search).has('perfoff'); } catch (e) { _q.perf = true; }
-  // (perf r2) ?qset=ao:0,ssr:0,shadowMapSize:1024 overrides single preset fields (GPU ablation with tools/perf_probe.mjs)
-  try {
-    const qs = new URLSearchParams(location.search).get('qset');
-    if (qs) for (const kv of qs.split(',')) { const [k, v] = kv.split(':'); if (k in _q) _q[k] = v === 'true' ? true : v === 'false' ? false : isNaN(+v) ? v : +v; }
-  } catch (e) { /* non-browser */ }
-  return _q;
+  return _q ??= selectQuality({ search: globalThis.location?.search ?? '',
+    launchQuality: globalThis.__spiderbenchQuality });
 }

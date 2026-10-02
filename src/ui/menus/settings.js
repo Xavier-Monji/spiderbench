@@ -1,3 +1,4 @@
+import { getDevice } from '../../platform/device.js';
 // OWNER: systems engineer. Settings: graphics (quality preset -> reload with ?q=, live render scale), controls
 // (mouse sensitivity, invert Y, keybind reference), audio (master / music / sfx / ambience / UI), gameplay (world markers,
 // reset progress). Persisted in the save's settings block; applied through sys.applySettings().
@@ -10,7 +11,8 @@ export function createSettingsPage(sys) {
   let cat = 'graphics';
   const S = () => save.state.settings;
   const main = el.querySelector('.main');
-  const curQ = new URLSearchParams(location.search).get('q') || 'high';
+  const curQ = sys.ctx.lighting.quality.name, mobile = !!sys.ctx.lighting.quality.mobile;
+  const fixedMobile = mobile && (getDevice().constrained || location.protocol === 'data:');
 
   const seg = (key, opts, label, sub) => `<div class="sys-opt"><label>${label}<small>${sub}</small></label><div class="sys-seg" data-k="${key}">${opts.map(([v, n]) => `<button data-v="${v}" class="${String(S()[key]) === String(v) ? 'on' : ''}">${n}</button>`).join('')}</div></div>`;
   const range = (key, min, max, step, label, sub, fmt = v => Math.round(v * 100) + '%') => `<div class="sys-opt"><label>${label}<small>${sub}</small></label><input type="range" class="sys-range" data-k="${key}" min="${min}" max="${max}" step="${step}" value="${S()[key]}"><span class="val" data-v="${key}">${fmt(+S()[key])}</span></div>`;
@@ -19,15 +21,15 @@ export function createSettingsPage(sys) {
   function render() {
     el.querySelectorAll('.cats .sys-list-item').forEach(n => n.classList.toggle('on', n.dataset.c === cat));
     if (cat === 'graphics') main.innerHTML = `<div class="sys-h3">Graphics</div>
-      ${seg('quality', [['low', 'Low'], ['med', 'Medium'], ['high', 'High']], 'Quality Preset', `Shadows, AO, clouds, DoF samples. Applying reloads the game (current: ${curQ}).`)}
+      ${seg('quality', fixedMobile ? [['mobile', 'Mobile']] : [['mobile', 'Mobile'], ['low', 'Low'], ['med', 'Medium'], ['high', 'High']], 'Quality Preset', fixedMobile ? 'Mobile memory safeguards stay locked on this device / launcher. Adjust render scale below.' : `Mobile: bounded resolution, one nearby shadow, FXAA; no GI/SSR/TAA/DoF/blur. Applying reloads (current: ${curQ}).`)}
       ${range('renderScale', 0.6, 1.25, 0.05, 'Render Resolution', 'Internal resolution scale. Lower for more FPS.', FMT.renderScale)}
       ${seg('timeOfDay', [['day', 'Day'], ['morning', 'Morning'], ['sunrise', 'Sunrise'], ['sunset', 'Sunset'], ['dusk', 'Dusk'], ['night', 'Night'], ['overcast', 'Overcast']], 'Time of Day', 'Hand-tuned lighting preset')}
       ${seg('daySun', [['a', 'Midday'], ['b', 'Late Morning'], ['c', 'Afternoon']], 'Day Sun', 'Sun direction for the Day preset (shadow angle)')}
       ${seg('puddles', [['true', 'On'], ['false', 'Off']], 'Puddles', 'Water and wet patches on the ground in dry weather (rain always wets the streets)')}`; // (lighting2 r3) fixed presets (no cycle)
     else if (cat === 'camera') main.innerHTML = `<div class="sys-h3">Camera</div>
       ${range('fovOffset', -10, 20, 1, 'Field of View', 'Base chase-camera FOV (speed widens it further)', FMT.fovOffset)}
-      ${seg('motionBlur', [['0', 'Off'], ['0.5', 'Low'], ['1', 'Medium'], ['1.6', 'High'], ['2.4', 'Very High']], 'Motion Blur', 'Speed blur, stronger the faster you move')}
-      ${seg('dof', [['0', 'Off'], ['1', 'On']], 'Depth of Field', 'Cinematic focus blur in menus and cutscenes (Photo Mode always has its own control)')}`;
+      ${seg('motionBlur', [['0', 'Off'], ['0.5', 'Low'], ['1', 'Medium'], ['1.6', 'High'], ['2.4', 'Very High']], 'Motion Blur', mobile ? 'Disabled by the mobile memory budget' : 'Speed blur, stronger the faster you move')}
+      ${seg('dof', [['0', 'Off'], ['1', 'On']], 'Depth of Field', mobile ? 'Disabled in the mobile profile, including Photo Mode' : 'Cinematic focus blur in menus and cutscenes (Photo Mode always has its own control)')}`;
     else if (cat === 'interface') main.innerHTML = `<div class="sys-h3">Interface</div>
       ${seg('minimalHud', [['false', 'Off'], ['true', 'On']], 'Minimal HUD', 'Hide all on-screen UI except the minimap')}
       ${range('hudScale', 0.8, 1.25, 0.05, 'HUD Scale', 'Minimap, objective, XP and notifications', FMT.hudScale)}

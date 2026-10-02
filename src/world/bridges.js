@@ -1,3 +1,4 @@
+import { getQuality } from '../render/quality.js';
 // OWNER: foundation agent (city remake); rebuilt by the bridges agent (bridges r1). East River bridges (definitions:
 // layout.BRIDGES). Every bridge is a complete road from a Manhattan street to the far shore:
 //   Manhattan street / avenue (at grade) -> approach plaza (apron over the sidewalk, lots cleared) -> approach viaduct
@@ -393,7 +394,7 @@ export function buildBridges({ scene, T, solids = null, zips = null, boxes = nul
   }
   // ---- meshes
   const add = (a, mat, name, shadow = true, opt = {}) => {
-    const g = a.build(opt); if (!g) return;
+    const g = a.build({ ...opt, consume: getQuality().mobile }); if (!g) return;
     const m = new THREE.Mesh(g, mat); m.name = name; m.castShadow = shadow; m.receiveShadow = true; m.layers.enable(REFL_LAYER); group.add(m);
   };
   add(K.stone, stoneMaterial(T), 'bridgeStone');

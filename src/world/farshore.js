@@ -12,6 +12,8 @@
 // terrain: farShoreHeight(x,z) -> FAR_Y | null (water). Piers are collision boxes (kind 'pier').
 import { nightK } from '../render/daynight.js'; // (daynight)
 import * as THREE from 'three';
+import { getQuality } from '../render/quality.js';
+import { deferredBuilder } from './streaming.js';
 import { mulberry32, hash2, pointInPoly, onLand, shoreX, G } from './layout.js';
 import { FacadeBuilder, STYLE, LAYER } from './facade.js';
 import { bridgeSpans } from './bridges.js';
@@ -155,7 +157,7 @@ export function buildFarShore({ scene, facadeMat, solids = null }) {
     if (p > 0.74 && r < 0.6) return PALE_Q[Math.floor(r / 0.6 * PALE_Q.length)];
     return arr[Math.floor(r * 0.9999 * arr.length)]; };
   const F = new FacadeBuilder();           // near buildings (facade shader)
-  const FR = new FacadeBuilder();          // (round 4) rooftop kits + container stacks / cranes: small casters (near cascades only)
+  const FR = getQuality().mobile ? farRoofRecipes() : new FacadeBuilder();          // (round 4) rooftop kits + container stacks / cranes: small casters (near cascades only)
   const bulk = new FacadeBuilder();        // bulkheads, piers
   const M = { P: [], N: [], C: [], I: [], n: 0 }; // far massed blocks (vertex colours)
   const wetSegs = [];                      // water-line edges for the wet tidal band (water.js buildWetBands)
@@ -1079,11 +1081,11 @@ export function buildFarShore({ scene, facadeMat, solids = null }) {
   // ---- meshes
   canopy.build(group, 'farCanopy', true, { tile: 1400, smallCasters: true }); // (perf) 700 -> 1400 m tiles: ~90 -> ~25 draws (far cascades skip smallCasters now)
   // tiled: frustum + cascade culling; crowns sub-texel in far cascades
-  const bm = new THREE.Mesh(bulk.build(), facadeMat); bm.name = 'farBulkheads'; bm.receiveShadow = true; bm.layers.enable(REFL_LAYER); group.add(bm);
-  const fg = F.build();
+  const bm = new THREE.Mesh(bulk.build({ consume: getQuality().mobile }), facadeMat); bm.name = 'farBulkheads'; bm.receiveShadow = true; bm.layers.enable(REFL_LAYER); group.add(bm);
+  const fg = F.build({ consume: getQuality().mobile });
   if (fg) { const fm = new THREE.Mesh(fg, facadeMat); fm.name = 'farCity'; fm.castShadow = true; fm.receiveShadow = true; fm.layers.enable(REFL_LAYER); group.add(fm); }
-  const frg = FR.build();
-  if (frg) { const fm = new THREE.Mesh(frg, facadeMat); fm.name = 'farCityRoofs'; fm.castShadow = true; fm.receiveShadow = true; fm.userData.smallCasters = true; group.add(fm); }
+  const frgs = FR.parts ? [...FR.parts.values()].map(b => b.build()) : [FR.build()];
+  for (const frg of frgs) if (frg) { const fm = new THREE.Mesh(frg, facadeMat); fm.name = 'farCityRoofs'; fm.castShadow = !getQuality().mobile; fm.receiveShadow = true; fm.userData.smallCasters = true; group.add(fm); }
   if (M.n) {
     const g = new THREE.BufferGeometry();
     g.setAttribute('position', new THREE.Float32BufferAttribute(M.P, 3));
@@ -1092,6 +1094,7 @@ export function buildFarShore({ scene, facadeMat, solids = null }) {
     g.setIndex(new THREE.Uint32BufferAttribute(M.I, 1));
     g.computeBoundingSphere();
     const mm = new THREE.Mesh(g, createMassMaterial()); mm.name = 'farCityMass'; mm.castShadow = true; mm.receiveShadow = true; mm.layers.enable(REFL_LAYER); group.add(mm);
+    if (getQuality().mobile) { M.P = M.N = M.C = M.I = []; }
   }
   let palGeo0 = palGeo;
   // land slabs with the baked ground map
@@ -1227,4 +1230,24 @@ function createMassMaterial() {
   };
   mat.customProgramCacheKey = () => 'far-mass-v2';
   return mat;
+}
+
+// Across-river roof details are invisible at kilometre ranges. Keep their exact recipe and only expand it nearby.
+function farRoofRecipes() {
+  const parts = new Map(), methods = ['quad', 'horiz', 'box', 'fan', 'ring', 'cyl', 'innerRing'];
+  return new Proxy({ parts }, { get(target, method) {
+    if (method === 'parts') return parts;
+    if (!methods.includes(method)) return target[method];
+    return (...a) => {
+      let x, z;
+      if (method === 'box') { x = (a[0] + a[3]) / 2; z = (a[2] + a[5]) / 2; }
+      else if (method === 'horiz' || method === 'innerRing') { x = (a[0] + a[2]) / 2; z = (a[1] + a[3]) / 2; }
+      else if (method === 'quad') { x = a[0][0] + a[1][0] * a[2] / 2; z = a[0][2] + a[1][2] * a[2] / 2; }
+      else if (method === 'fan') { x = a[0].reduce((n, p) => n + p[0], 0) / a[0].length; z = a[0].reduce((n, p) => n + p[1], 0) / a[0].length; }
+      else { [x, z] = a; }
+      const cx = (Math.floor(x / 256) + 0.5) * 256, cz = (Math.floor(z / 256) + 0.5) * 256, key = cx + ',' + cz;
+      if (!parts.has(key)) parts.set(key, deferredBuilder(FacadeBuilder, { methods, role: 'farRoof', cx, cz, range: 320 }));
+      return parts.get(key)[method](...a);
+    };
+  } });
 }

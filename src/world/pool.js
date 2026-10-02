@@ -1,6 +1,7 @@
 // OWNER: city agent. Distance-culled instancing: one InstancedMesh per prop type; the instances near the camera
 // are repacked every time the camera moves a few metres (static props) or every frame (dynamic sets).
 import * as THREE from 'three';
+import { getQuality } from '../render/quality.js';
 import { csmShared } from '../render/csm.js';
 import { perf2Off } from './tilebatch.js'; // (perf r2) A/B switch
 const NOWEDGE = perf2Off('nowedge');
@@ -51,20 +52,26 @@ const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _p = new THREE.Vect
 const GRIDS = new WeakMap();
 
 export class Pool {
-  static sortF2B = !new URLSearchParams(location.search).has('nof2b'); static sortMax = 20000; // (perf r3) A/B: ?nof2b
+  static sortF2B = !new URLSearchParams(globalThis.location?.search ?? '').has('nof2b'); static sortMax = 20000; // (perf r3) A/B: ?nof2b
   // extra: {name: itemSize} per-instance attributes
   // fadeIn / fadeOut: widths (m) of the dithered fades over [near - fadeIn, near] and [far - fadeOut, far]. The defaults
   // (8% of the distance, >= 10 m) match between a near LOD (far = X) and its far LOD (near = X) -> complementary bands.
   // static: true -> all items are written once (no distance culling, no cap): far LODs that span the whole map.
   constructor(geo, mat, { max = 1024, near = 0, far = 400, castShadow = true, receiveShadow = true, extra = {}, color = false, name = '',
     fadeIn = 0, fadeOut = null, isStatic = false, shadowFar = null, smallCasters = false } = {}) {
+    const Q = getQuality();
+    if (Q.mobile && !isStatic) {
+      far = Math.min(far, Q.propFar);
+      max = Math.max(64, Math.ceil(max * 0.75));
+      if (near >= far) max = 1; // tier entirely beyond the bounded draw range
+    }
     this.geo = geo; this.mat = mat; this.max = max; this.near = near; this.far = far;
     this.fadeIn = near > 0 ? fadeIn || Math.max(10, near * 0.08) : 0;
     this.fadeOut = fadeOut ?? Math.max(10, far * 0.08);
     this.isStatic = isStatic;
     // shadow casting only for instances within shadowFar of the camera (default 160 m, never beyond `far`): the
     // instances are written nearest-shadow-casters-first and the shadow passes draw only that prefix (onBeforeShadow)
-    this.shadowFar = Math.min(far, shadowFar ?? 160);
+    this.shadowFar = Math.min(far, shadowFar ?? 160, Q.mobile ? 55 : Infinity);
     this.nShadow = 0;
     extra = { ...extra, aLod: 4 };
     applyLodFade(mat);

@@ -169,7 +169,7 @@ function installUniformCache(renderer) {
 
 export class CSM {
   constructor({ scene, quality, reversed, renderer }) {
-    this.N = quality.cascades;
+    this.N = quality.cascades; this.temporal = quality.taa;
     this.splits = quality.splits.slice();
     this.size = quality.shadowMapSize;
     this.reversed = reversed;
@@ -179,7 +179,7 @@ export class CSM {
     this.lights = [];
     this.frame = 0;
     // update period per cascade (far cascades refresh less often; they are padded to cover staleness)
-    this.periods = [1, 2, 4, 8, 8].slice(0, this.N);
+    this.periods = (quality.mobile ? [2] : [1, 2, 4, 8, 8]).slice(0, this.N);
     const radii = [1.6, 1.25, 1.1, 1.0, 1.0]; // (lighting2 r3) was 2.5/1.8/1.4/1.1: crisper street-scale shadow edges (TAA smooths the taps)
     for (let i = 0; i < this.N; i++) {
       const l = new THREE.DirectionalLight(0xffffff, i === 0 ? 1 : 0);
@@ -392,7 +392,7 @@ export class CSM {
   update(camera, scene) {
     this.frame++;
     if (scene && (this._tagFrame++ % 120) === 0) { this.tagCasters(scene); if (this._layerFix) this._collectBig(scene); } // (perf)
-    csmShared.params.x = (this.frame % 64) * 0.618034 % 1;
+    csmShared.params.x = this.temporal ? (this.frame % 64) * 0.618034 % 1 : 0;
     csmShared.params.y = 0.06;
     const L = this.sunDir;
     // light basis

@@ -3,6 +3,7 @@
 // (mirrored camera render, only while the camera is near) blended into the IBL specular term, so Spidey and the
 // park/avenue reflect in it; where the reflection render is empty (sky) the regular environment map is used.
 import * as THREE from 'three';
+import { getQuality } from '../render/quality.js';
 import { FacadeBuilder, STYLE, LAYER } from './facade.js';
 
 export function buildHero({ scene, rect, facadeMat, renderer, height = 96, solids = null, zips = null }) {
@@ -60,13 +61,13 @@ export function buildHero({ scene, rect, facadeMat, renderer, height = 96, solid
   // ---- planar reflection
   const size = new THREE.Vector2();
   renderer.getDrawingBufferSize(size);
-  const rt = new THREE.WebGLRenderTarget(Math.max(256, size.x >> 1), Math.max(256, size.y >> 1), { type: THREE.HalfFloatType, samples: 2 }); // render agent: 2x MSAA (sawtooth edges in the mirror; 4x too costly)
+  const rt = getQuality().planarReflections === false ? null : new THREE.WebGLRenderTarget(Math.max(256, size.x >> 1), Math.max(256, size.y >> 1), { type: THREE.HalfFloatType, samples: 2 }); // render agent: 2x MSAA (sawtooth edges in the mirror; 4x too costly)
   // citygeo: mipmapped + 4-tap filtered lookup: the half-res mirror of dense foliage otherwise aliases into
   // concentric moire rings across the reflected park
-  rt.texture.generateMipmaps = true; rt.texture.minFilter = THREE.LinearMipmapLinearFilter;
-  const texel = new THREE.Vector2(1 / rt.width, 1 / rt.height);
+  if (rt) { rt.texture.generateMipmaps = true; rt.texture.minFilter = THREE.LinearMipmapLinearFilter; }
+  const texel = new THREE.Vector2(1 / (rt?.width ?? 1), 1 / (rt?.height ?? 1));
   const texMat = new THREE.Matrix4();
-  const uni = { tRefl: { value: rt.texture }, uTexMat: { value: texMat }, uReflOn: { value: 0 }, uTexel: { value: texel } };
+  const uni = { tRefl: { value: rt?.texture ?? null }, uTexMat: { value: texMat }, uReflOn: { value: 0 }, uTexel: { value: texel } };
   const glassMat = new THREE.MeshStandardMaterial({ color: 0x2a3540, roughness: 0.03, metalness: 0 }); // coated curtain-wall glass: dim blue-grey body, high reflectance
   glassMat.onBeforeCompile = (sh) => {
     Object.assign(sh.uniforms, uni);
@@ -94,6 +95,7 @@ export function buildHero({ scene, rect, facadeMat, renderer, height = 96, solid
   const _box = new THREE.Box3(), _fr = new THREE.Frustum(), _pm = new THREE.Matrix4();
   const bias = new THREE.Matrix4().set(0.5, 0, 0, 0.5, 0, 0.5, 0, 0.5, 0, 0, 0.5, 0.5, 0, 0, 0, 1);
   function renderReflection(camera) {
+    if (!rt) return;
     camera.updateMatrixWorld();
     _p.setFromMatrixPosition(camera.matrixWorld);
     const dist = Math.hypot(_p.x - X, _p.y - glass.position.y, Math.max(0, Math.abs(_p.z - glass.position.z) - (z1 - z0) / 2));

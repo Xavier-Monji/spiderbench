@@ -1,3 +1,4 @@
+import { assetUrl } from '../platform/assets.js';
 // OWNER: city agent. Autumn trees: branching trunks + dense alpha-tested leaf-cluster cards with spherical normals,
 // per-instance two-tone autumn tint, canopy self-occlusion. Two LODs per kind, instanced through distance pools.
 import * as THREE from 'three';
@@ -124,7 +125,7 @@ let LEAF_TEX = null;
 function leafTextures() {
   if (LEAF_TEX) return LEAF_TEX;
   const ld = new THREE.TextureLoader();
-  const mk = (f) => { const t = ld.load('/assets/city/props/' + f); t.anisotropy = 4; t.wrapS = t.wrapT = THREE.RepeatWrapping; t.colorSpace = THREE.NoColorSpace; return t; };
+  const mk = (f) => { const t = ld.load(assetUrl('/assets/city/props/') + f); t.anisotropy = 4; t.wrapS = t.wrapT = THREE.RepeatWrapping; t.colorSpace = THREE.NoColorSpace; return t; };
   LEAF_TEX = { col: mk('leaves_col.png'), nrm: mk('leaves_nrm.png') };
   return LEAF_TEX;
 }

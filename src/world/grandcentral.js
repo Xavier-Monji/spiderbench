@@ -636,7 +636,7 @@ export function buildGrandCentral({ scene, gen, T }) {
       }
       if (S) S.box(kx(sx + Math.min(sg * 1.2, sg * 10)), b0, kz(sz - 1.4), kx(sx + Math.max(sg * 1.2, sg * 10)), ky(b0 + 2.4), kz(sz + 1.3), 'wall');
     }
-    for (let i = vSc * 3; i < mb.v * 3; i += 3) { mb.p[i] = kx(mb.p[i]); mb.p[i + 1] = ky(mb.p[i + 1]); mb.p[i + 2] = kz(mb.p[i + 2]); }
+    for (let i = vSc * 3; i < mb.v * 3; i += 3) { mb.p.set(i, kx(mb.p.get(i))); mb.p.set(i + 1, ky(mb.p.get(i + 1))); mb.p.set(i + 2, kz(mb.p.get(i + 2))); }
     // eagles with half-spread wings on the attic ends
     for (const sg of [-1, 1]) {
       const ex = CX + sg * 24.8, ey = H_ATTIC, ez = ZF - 0.2;
@@ -646,7 +646,7 @@ export function buildGrandCentral({ scene, gen, T }) {
       blob(ex, ey + 2.78, ez + 0.58, 0.1, 0.08, 0.22);
       for (const s2 of [-1, 1]) extr([[0, 0], [0.9, 0.7], [1.9, 1.7], [2.3, 2.6], [1.7, 2.2], [1.8, 1.7], [1.2, 1.5], [1.2, 1.0], [0.6, 0.9], [0.2, 0.5]], 0.12,
         new THREE.Matrix4().compose(new THREE.Vector3(ex + s2 * 0.3, ey + 1.3, ez - 0.2), Q(0, s2 > 0 ? -0.35 : Math.PI + 0.35, 0), new THREE.Vector3(1, 1, 1)));
-      for (let i = vE * 3; i < mb.v * 3; i += 3) { mb.p[i] = ex + (mb.p[i] - ex) * 0.65; mb.p[i + 1] = ey + 0.8 + (mb.p[i + 1] - ey - 0.8) * 0.65; mb.p[i + 2] = ez + (mb.p[i + 2] - ez) * 0.65; }
+      for (let i = vE * 3; i < mb.v * 3; i += 3) { mb.p.set(i, ex + (mb.p.get(i) - ex) * 0.65); mb.p.set(i + 1, ey + 0.8 + (mb.p.get(i + 1) - ey - 0.8) * 0.65); mb.p.set(i + 2, ez + (mb.p.get(i + 2) - ez) * 0.65); }
       if (S) S.box(ex - 0.8, ey + 0.8, ez - 0.4, ex + 0.8, ey + 2.35, ez + 0.55, 'wall');
     }
   }

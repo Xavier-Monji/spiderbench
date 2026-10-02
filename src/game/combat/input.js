@@ -16,15 +16,17 @@ export function createCombatInput(realClock, gameClock) {
   const press = k => pressed.set(k, gnow());
   addEventListener('keydown', e => { if (!enabled || typing(e) || e.repeat) return; const k = KEYS[e.code]; if (k) press(k); });
   addEventListener('mousedown', e => {
-    if (!enabled) return;
+    if (!enabled || e.target?.closest?.('[data-touch-ui]') || e.sourceCapabilities?.firesTouchEvents) return;
     if (e.ctrlKey && (e.button === 0 || e.button === 2)) return; // Ctrl+click = web slingshot anchor (player/input.js), never an attack
     if (e.button === 0) { lmbDown = true; pressT = rnow(); holdSent = false; press('attack'); }
     if (e.button === 1) press('strike');
   });
   addEventListener('mouseup', e => { if (e.button === 0) { lmbDown = false; holdSent = true; } });
-  addEventListener('blur', () => { lmbDown = false; holdSent = true; });
+  const reset = () => { pressed.clear(); lmbDown = padDown = touchDown = false; holdSent = true; };
+  addEventListener('blur', reset);
+  document.addEventListener('visibilitychange', () => { if (document.hidden) reset(); });
   const prev = [];
-  let padDown = false;
+  let padDown = false, touchDown = false;
   function pollPad() {
     const pads = navigator.getGamepads ? navigator.getGamepads() : [];
     for (const p of pads) {
@@ -44,14 +46,21 @@ export function createCombatInput(realClock, gameClock) {
     }
   }
   return {
-    set enabled(v) { enabled = v; if (!v) { pressed.clear(); holdSent = true; } },
+    set enabled(v) { enabled = v; if (!v) reset(); },
     get enabled() { return enabled; },
+    // Pointer controls use the same buffered/charged attack semantics as mouse and gamepad.
+    pressAction(action) {
+      if (!enabled) return;
+      if (action === 'attack') { touchDown = true; pressT = rnow(); holdSent = false; }
+      press(action);
+    },
+    releaseAction(action) { if (action === 'attack') { touchDown = false; if (!lmbDown && !padDown) holdSent = true; } },
     poll() { if (enabled) pollPad(); },
     // buffered press still fresh (not consumed)
     has(k) { const t = pressed.get(k); if (t == null) return false; if (gnow() - t > BUFFER) { pressed.delete(k); return false; } return true; },
     take(k) { const ok = this.has(k); pressed.delete(k); return ok; },
     // 'hold' once LMB / Square has been held past the threshold (reported once per press)
-    holdNow() { if (!holdSent && (lmbDown || padDown) && rnow() - pressT >= HOLD) { holdSent = true; return true; } return false; },
-    clear() { pressed.clear(); },
+    holdNow() { if (!holdSent && (lmbDown || padDown || touchDown) && rnow() - pressT >= HOLD) { holdSent = true; return true; } return false; },
+    clear: reset,
   };
 }

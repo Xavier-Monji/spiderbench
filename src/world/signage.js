@@ -1,3 +1,5 @@
+import { getQuality } from '../render/quality.js';
+import { assetUrl } from '../platform/assets.js';
 // OWNER: billboards agent. City-wide signage outside Times Square, attached procedurally per building lot + face, so it
 // follows whatever street layout generateBuildings() was given (no hard-coded coordinates except optional square hints):
 //   * rooftop billboard frames (printed vinyl from the ts_ads atlas, steel columns, catwalk, gooseneck lamps) on low /
@@ -22,7 +24,7 @@ import { AD_AVG_L, AD_AVG_P } from './ts_ads_meta.js';
 import { nightK, screenK } from '../render/daynight.js'; // (daynight)
 import { adsTexture } from './adstex.js'; // (r3) shared GPU copy of the ad atlas
 
-const TEX = '/assets/city/tex/';
+const TEX = assetUrl('/assets/city/tex/');
 const CELL = 512;
 const Q = typeof location !== 'undefined' ? new URLSearchParams(location.search) : new URLSearchParams();
 const OFF = Q.has('nosignage');
@@ -794,7 +796,7 @@ export function buildSignage({ scene, gen }) {
   const opMat = signMaterial(adsTex, signTex, noise, false, artTex), ghMat = null; // (ghost signs now dithered inside the opaque mesh)
   const list = [];
   for (const c of cells.values()) {
-    const go = c.op.build(), gg = c.gh.build();
+    const go = c.op.build({ consume: getQuality().mobile }), gg = c.gh.build({ consume: getQuality().mobile });
     const e = { x0: c.x0, z0: c.z0, op: null, gh: null };
     if (go) {
       const m = new THREE.Mesh(go, opMat); m.name = 'signage'; m.castShadow = true; m.receiveShadow = true;

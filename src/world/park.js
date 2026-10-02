@@ -1,3 +1,4 @@
+import { getQuality } from '../render/quality.js';
 // OWNER: park agent (city remake). Central Park set pieces beyond the ground / trees:
 //   - PARK_SITES: lots inside the park kept clear of trees / paths (trees.js, ground.js via adjustParkPaths)
 //   - a Met-like museum on the Fifth-Avenue edge (~80th-84th): limestone Beaux-Arts front with a colonnaded central
@@ -391,7 +392,7 @@ export function buildPark({ scene, facadeMat, solids = null, zips = null, meadow
         }
       }
     }
-    const mb = metB.build();
+    const mb = metB.build({ consume: getQuality().mobile });
     if (mb) { const m = new THREE.Mesh(mb, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.5, metalness: 0.5 })); m.castShadow = true; m.receiveShadow = true; m.name = 'park-met-steel'; scene.add(m); }
     if (zips) {
       zips.edge(223.2, -1362, 223.2, -1208, HW + 1.2, 1, 0);
@@ -520,7 +521,7 @@ export function buildPark({ scene, facadeMat, solids = null, zips = null, meadow
   buildReeds(scene);                                      // (park r6) reed beds / tall grass along the pond banks
   buildParkEdge(scene, S);                                // (park r4) lamps + hex-paver band along the wall
   if (meadowDist) out.people = buildParkPeople(scene, parkPaths);   // (park r4) people on the lawns and walks
-  const g = F.build();
+  const g = F.build({ consume: getQuality().mobile });
   if (g) {
     const mesh = new THREE.Mesh(g, facadeMat);
     mesh.castShadow = true; mesh.receiveShadow = true; mesh.name = 'park-setpieces';
@@ -725,7 +726,7 @@ function buildParkWall(scene, F, S) {
       { const [a, b] = X(0.08, 0.12); S?.box(a, y0 + 0.55, za + 0.06, b, y0 + 0.9, zb - 0.06, 'equipment'); }
     }
   }
-  const bg = B.build();
+  const bg = B.build({ consume: getQuality().mobile });
   if (bg) {
     const m = new THREE.Mesh(bg, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.7 }));
     m.castShadow = true; m.receiveShadow = true; m.name = 'park-wall-benches';
@@ -819,7 +820,7 @@ function buildBallfields(scene, S, box = null) {
   mat.customProgramCacheKey = () => 'park-chainlink-v1';
   const mesh = new THREE.Mesh(g, mat); mesh.name = 'park-ballfield-fences'; mesh.renderOrder = 3;
   scene.add(mesh);
-  const pg = posts.build();
+  const pg = posts.build({ consume: getQuality().mobile });
   if (pg) { const pm = new THREE.Mesh(pg, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.6, metalness: 0.4 })); pm.castShadow = true; pm.receiveShadow = true; pm.name = 'park-ballfield-posts'; scene.add(pm); }
 }
 
@@ -939,9 +940,9 @@ function buildParkEdge(scene, S) {
   for (const sx of [P.x0 - e, P.x1 + e]) runs.push({ x: sx + (sx < 0 ? -1.35 : 1.35), a: P.z0 + 6, b: P.z1 - 6, alongX: false });
   for (const sz of [P.z0 - e, P.z1 + e]) runs.push({ z: sz + (sz < -1000 ? -1.35 : 1.35), a: P.x0 + 6, b: P.x1 - 6, alongX: true });
   for (const R of runs) for (let s = R.a + rnd() * 6; s < R.b; s += 17 + rnd() * 4) R.alongX ? lamp(s, R.z) : lamp(R.x, s);
-  const lg = L.build();
+  const lg = L.build({ consume: getQuality().mobile });
   if (lg) { const m = new THREE.Mesh(lg, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.55, metalness: 0.5 })); m.castShadow = true; m.receiveShadow = true; m.name = 'park-lamps'; scene.add(m); }
-  const gg = glow.build();
+  const gg = glow.build({ consume: getQuality().mobile });
   if (gg) { const m = new THREE.Mesh(gg, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.2, emissive: 0xffe2b0, emissiveIntensity: 0.35, transparent: true, opacity: 0.9 })); m.name = 'park-lamp-globes'; scene.add(m); }
   // hex-paver band: 4 quads, a world-space hexagon shader (mortar lines, per-paver tone, grime near the wall)
   const W = 1.95, yy = y + 0.004, Pq = [], I = [];
@@ -1076,7 +1077,7 @@ function buildParkPeople(scene, parkPaths) {
   PARK_CROWD_SPOTS.length = 0;
   for (const p of people) if (p.kind !== 'path') PARK_CROWD_SPOTS.push({ x: p.x, z: p.z, ry: p.ry, pose: p.pose, kind: p.kind, g: p.g, alongX: p.alongX, y: p.y ?? y0 });
   void fig; void head; void pose;
-  if (blankets.length) mk(blanket.build(), blankets, 'park-blankets', (b) => b.c, (b, E, V, Sc) => { E.set(0, b.ry, 0); V.set(b.x, y0 + 0.005, b.z); Sc.set(1, 1, 1); });
+  if (blankets.length) mk(blanket.build({ consume: getQuality().mobile }), blankets, 'park-blankets', (b) => b.c, (b, E, V, Sc) => { E.set(0, b.ry, 0); V.set(b.x, y0 + 0.005, b.z); Sc.set(1, 1, 1); });
   return people.length;
 }
 
@@ -1316,9 +1317,9 @@ function buildPathFurniture(scene, S, parkPaths) {
       if (!wet(x, z)) { lampPost(L, glow, S, x, y, z); nl++; }
     }
   }
-  const lg = L.build();
+  const lg = L.build({ consume: getQuality().mobile });
   if (lg) { const m = new THREE.Mesh(lg, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.6, metalness: 0.4 })); m.castShadow = true; m.receiveShadow = true; m.name = 'park-path-furniture'; scene.add(m); }
-  const gg = glow.build();
+  const gg = glow.build({ consume: getQuality().mobile });
   if (gg) { const m = new THREE.Mesh(gg, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.2, emissive: 0xffe2b0, emissiveIntensity: 0.35, transparent: true, opacity: 0.9 })); m.name = 'park-path-globes'; scene.add(m); }
   if (DP.length) {
     const g = new THREE.BufferGeometry();

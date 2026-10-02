@@ -20,7 +20,7 @@ class GrowBuf {
   constructor(T = Float32Array, n = 2048) { this.T = T; this.a = new T(n); this.length = 0; }
   push(...v) {
     const L = this.length + v.length;
-    if (L > this.a.length) { const b = new this.T(Math.max(this.a.length * 2, L)); b.set(this.a.subarray(0, this.length)); this.a = b; }
+    if (L > this.a.length) { const b = new this.T(Math.max(Math.ceil(this.a.length * 1.5), L)); b.set(this.a.subarray(0, this.length)); this.a = b; }
     for (let i = 0; i < v.length; i++) this.a[this.length + i] = v[i];
     this.length = L;
   }
@@ -146,7 +146,8 @@ export class FacadeBuilder {
     this.quad([x0, 0, z1], [0, 0, -1], z1 - z0, y0, y1, [1, 0, 0], p, 0, 0);
     this.quad([x1, 0, z0], [0, 0, 1], z1 - z0, y0, y1, [-1, 0, 0], p, 0, 0);
   }
-  build() {
+  release() { for (const k of ['pos', 'nrm', 'uv', 'aF', 'aS', 'aW', 'aX', 'tint', 'idx']) { const b = this[k]; b.a = new b.T(0); b.length = 0; } this.n = 0; }
+  build({ consume = false } = {}) {
     if (!this.n) return null;
     const g = new THREE.BufferGeometry();
     const A = (b, k) => new THREE.BufferAttribute(b.take(), k);
@@ -162,6 +163,7 @@ export class FacadeBuilder {
     g.setIndex(this.n > 65535 ? new THREE.BufferAttribute(ix, 1) : new THREE.BufferAttribute(Uint16Array.from(ix), 1));
     g.computeBoundingSphere();
     g.computeBoundingBox();
+    if (consume) this.release();
     return g;
   }
 }

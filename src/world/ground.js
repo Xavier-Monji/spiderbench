@@ -1,3 +1,4 @@
+import { getQuality } from '../render/quality.js';
 // OWNER: city agent. Streets (asphalt shader w/ lane grime), sidewalks + curbs, road markings, park ground, water.
 import * as THREE from 'three';
 import { G, avenues, streets, inPark, mulberry32, closedAt, streetsAt, onLand, avActive, isActive, stRange, roadRects, NCOL, NROW,
@@ -464,6 +465,7 @@ class DecalBuilder {
     g.setAttribute('color', new THREE.Float32BufferAttribute(this.C, 3));
     g.setIndex(new THREE.Uint32BufferAttribute(this.I, 1));
     g.computeBoundingSphere();
+    if (getQuality().mobile) { this.P = this.UV = this.C = this.I = []; this.v = 0; }
     return g;
   }
 }
@@ -667,7 +669,7 @@ function buildMarkings(T, rnd) {
       D.addDir('line', px - ox * 0.9, pz - oz * 0.9, 1.2, 0.75, ox, oz, [0.86, 0.66, 0.12], G.CURB_H + 0.012); // inset so no corner overhangs the curve
     }
   }
-  return D.build();
+  return D.build({ consume: getQuality().mobile });
 }
 
 // ------------------------------------------------------------------ park ground & water
@@ -1482,7 +1484,7 @@ export function buildGround({ scene, T, blocks, facadeMat, solids = null, zips =
   // ---- (coast r1) the waterfront edge all round the island + the near far banks (waterfront.js)
   const coast = buildWaterfront({ scene, T, piers: PIERS, pileFields: PILE_FIELDS, solids, zips, fills, wall });
   out.wetSegs = coast.wetSegs; out.coast = coast;
-  const wg = wall.build();
+  const wg = wall.build({ consume: getQuality().mobile });
   const wm = new THREE.Mesh(wg, facadeMat);
   wm.castShadow = true; wm.receiveShadow = true; wm.name = 'seawall+parkwall';
   scene.add(wm);

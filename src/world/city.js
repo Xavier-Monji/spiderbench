@@ -4,6 +4,9 @@
 //             buildings:[{min,max}], streetsAt(x,z), getMapFeatures(), viewpoints:{street,wall,swing,swingBack,climb}, ... }
 // Debug: ?cam=x,y,z,tx,ty,tz forces the camera; ?vp=<viewpoint name> puts the camera at a named viewpoint.
 import * as THREE from 'three';
+import { getQuality } from '../render/quality.js';
+import { createGeometryStreamer } from './streaming.js';
+import { compactGeometry } from '../render/geometry-budget.js';
 import { G, buildBlocks, streetsAt, inPark, roadRects, avenues, AV_NAMES, LAND_POLY, SHORE_Z, SHORE_W, SHORE_E, PARK_WATER, diagRoadPolys, DIAG_SEGS, diagD, diagS, VMAP, MAPS, BATTERY, vmapRoadPolys, polyArea, inConvexPoly, islands, inCurbCut, LINCOLN } from './layout.js'; // (layout2 r5) inCurbCut // (layout2 r2) VMAP (+ r3 islands)
 import { buildFarShore, FAR_LANDS } from './farshore.js';
 import { buildBridges, approachRects, bridgeLimits, bridgeDeckY, bridgeKeepOuts } from './bridges.js';
@@ -34,15 +37,23 @@ import { applyDistanceFade } from './pool.js';
 import { batchTiles } from './tilebatch.js'; // (perf)
 
 export async function buildCity({ scene, renderer }) {
+  const Q = getQuality();
+  const facadeNear = Q.facadeNear ?? 650, detailFar = Q.detailFar ?? 450;
   const t0 = performance.now();
   const boot = globalThis.__boot; // loading screen (index.html): each stage label paints before its (blocking) work starts
   await boot?.stage('tex');
   const T = await loadCityTextures(renderer);
   const facadeMat = createFacadeMaterial(T);
   const detailMat = createDetailMaterial(T);
-  applyDistanceFade(detailMat, 320, 450); // citylife: small facade details dissolve 320-450 m; tiles hidden beyond (no pop)
+  applyDistanceFade(detailMat, Q.mobile ? 180 : 320, detailFar);
+  if (Q.mobile) applyDistanceFade(facadeMat, 2000, Q.worldFar); // citylife: small facade details dissolve 320-450 m; tiles hidden beyond (no pop)
 
-  const TT = [], tick = async (n, next) => { TT.push(n + ' ' + (performance.now() - t0).toFixed(0)); if (next) await boot?.stage(next); };
+  const memlog = new URLSearchParams(location.search).has('memlog');
+  const TT = [], tick = async (n, next) => {
+    TT.push(n + ' ' + (performance.now() - t0).toFixed(0));
+    if (memlog) console.log('[city:stage]', n, performance.memory?.usedJSHeapSize);
+    if (next) await boot?.stage(next);
+  };
   await tick('tex', 'gen');
   const blocks = buildBlocks();
   // hero tower for the `wall` shot (ref 2) on the park-facing block east of the avenue at x=250
@@ -67,6 +78,7 @@ export async function buildCity({ scene, renderer }) {
   scene.add(root);
   buildStandalone({ scene: root, gen, T }); // citygeo: Grand Central, Times-Square screens (writes into the tile builders)
   buildTimesSquare({ scene: root, gen }); // timessq: screens, plazas, TKTS steps, One-Times-Square tower (writes into the tile builders)
+  if (memlog) console.log('[city:pre-roofs]', gen.buildings.length, gen.solids.count, performance.memory?.usedJSHeapSize);
   const rooftops = await buildRooftops({ scene: root, gen, facadeMat, T, renderer, extraRoofs: [{ rect: heroRect, H: 96 }] }); // rooftops: roof skins, penthouses, clutter (writes into the tile builders)
   const signage = buildSignage({ scene: root, gen }); // billboards: rooftop billboards, wall ads, blade signs, LED corners (steel -> detail tiles)
   const tileMeshes = [];
@@ -100,7 +112,7 @@ export async function buildCity({ scene, renderer }) {
   const bridges = buildBridges({ scene: root, T, solids: gen.solids, zips: gen.zips, boxes: gen.boxes }); // foundation: East River bridges (bridges r1: + anchor boxes)
   await tick('bridges');
   // foundation: distant hinterland out to the horizon + wet tidal bands along every seawall / bulkhead
-  const hinter = buildHinterland({ scene: root });
+  const hinter = Q.mobile ? { count: 0 } : buildHinterland({ scene: root }); // beyond the mobile far plane
   buildWetBands({ scene: root, T, segs: [...(ground.wetSegs ?? []), ...(far.wetSegs ?? [])] });
   await tick('hinterland ' + hinter.count, 'props');
   const boats = buildBoats({ scene: root, solids: gen.solids, // foundation: river traffic + wakes (+ round 12: moored boats at the piers)
@@ -173,7 +185,7 @@ export async function buildCity({ scene, renderer }) {
   // citygeo: exact collision for instanced rooftop props (replaces their coarse boxes; C4)
   const tFit = performance.now();
   const roofEq = { minY: 3, solidBase: true };
-  const fit = fitInstancedSolids(gen.solids, props.pools ?? [], { start: nSolidsPre, spec: {
+  const fit = fitInstancedSolids(gen.solids, props.pools ?? [], { start: nSolidsPre, cell: Q.collisionCell ?? 0.025, spec: {
     hvac: roofEq, vents: roofEq, garden: roofEq, dish: { minY: 3 }, antenna: { minY: 3, kind: 'antenna' },
     lamp: { yCut: 8.3, keepOld: true, kind: 'pole' },     // cobra head + arm above the pole cylinder (zip lampTop)
     mast: { yCut: 6.2, keepOld: true, kind: 'pole' },     // signal arm, heads, street-name blades (zip signalMast)
@@ -186,11 +198,24 @@ export async function buildCity({ scene, renderer }) {
   trees.addSolids?.(gen.solids); // (veg r1) trunk collision (after the refit: it culls solids inside prop footprints)
   const grid = new CollisionGrid(gen.solids, 24);
   const zips = gen.zips.finalize(grid);
+  // The queries own packed copies. The map/viewpoint closures retain gen, so without this the construction
+  // doubles and capacity slack stayed alive for the whole session alongside the collision grid.
+  if (Q.mobile) for (const key of ['t', 'b', 'p', 'f', 'k']) gen.solids[key] = [];
   const { groundHeight, raycast, surfaceAt } = makeQueries(grid, terrainHeight);
   const geoDebug = createGeoDebug(root, grid, zips, collisionDebugLines);
   await tick('coll');
 
   const spawn = new THREE.Vector3(250, 0, 160 + G.ST_HALF + 2.3); // on the centre line, in the south crosswalk
+  if (Q.mobile) {
+    const packed = new WeakMap(), seen = new Set();
+    root.traverse(m => { if (m.geometry && !m.geometry.userData.streaming && !m.isSkinnedMesh && !m.userData.dynamic && !seen.has(m.geometry)) {
+      seen.add(m.geometry); compactGeometry(m.geometry, packed);
+    } });
+  }
+  const streamer = Q.mobile ? createGeometryStreamer(root) : null;
+  if (streamer) { await boot?.stage('shaders'); await streamer.prime(spawn);
+    // Keep nearby building silhouettes casting, but avoid shadowing millions of sub-pixel roof/prop triangles.
+    root.traverse(m => { if (m.userData.smallCasters || /^(roofs |detail |roofplants|farCityRoofs)/.test(m.name)) m.castShadow = false; }); }
   const viewpoints = makeViewpoints(gen, spawn, hero);
 
   const params = new URLSearchParams(location.search);
@@ -237,6 +262,7 @@ export async function buildCity({ scene, renderer }) {
         const t1_ = P_ ? performance.now() : 0;
         trees.update(dt, cp);
         flags.update(dt, cp);
+        streamer?.update(cp);
         rooftops.update(camera);
         signage.update(cp); // billboards: per-cell distance culling
         const t2_ = P_ ? performance.now() : 0;
@@ -255,16 +281,17 @@ export async function buildCity({ scene, renderer }) {
         _pm.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse); _fr.setFromProjectionMatrix(_pm);
         for (const tm of tileMeshes) { // citylife: nearest-point tile distance; details dissolve by 450 m, cast shadows near only
           const d = Math.hypot(Math.max(0, Math.abs(camera.position.x - tm.cx) - 128), Math.max(0, Math.abs(camera.position.z - tm.cz) - 128));
-          if (tm.mesh) { detB.setVisible(tm.i, d < 450); detB.setShadow(tm.i, d < 160); } // (perf) batched tiles
+          if (tm.mesh) { detB.setVisible(tm.i, d < detailFar && detB.hasDrawReady(tm.i)); detB.setShadow(tm.i, !Q.mobile && d < 160); } // (perf) batched tiles
           // citygeo: full facade tile near, bare-mass LOD far (hysteresis 40 m)
-          if (tm.lod) { const near = tm.near ? d < 690 : d < 650; tm.near = near; if (tm.fac) facB.setVisible(tm.i, near); lodB.setVisible(tm.i, !near); }
+          if (tm.lod) { const near = tm.near ? d < facadeNear + 40 : d < facadeNear; tm.near = near; if (tm.fac) facB.setVisible(tm.i, near && facB.hasDrawReady(tm.i)); lodB.setVisible(tm.i, (!near || !facB.hasDrawReady(tm.i)) && d < (Q.worldFar ?? Infinity)); }
           // (perf r2) pre-upload the tile about to appear (one vertex buffer per frame, tiles inside the view frustum
           // first), so the swap at 650-690 m / 450 m does not upload ~15-20 MB in one frame (100-150 ms hitches)
-          if (!warmed && d < 850 && ((tm.fac && !tm.warmF && !tm.near) || (tm.mesh && !tm.warmD && d >= 450 && d < 600))) {
+          if (Q.mobile) { if (!facB.hasReady(tm.i)) tm.warmF = false; if (!detB.hasReady(tm.i)) tm.warmD = false; }
+          if (!warmed && d < facadeNear + 200 && ((tm.fac && !tm.warmF && (Q.mobile || !tm.near)) || (tm.mesh && !tm.warmD && (Q.mobile || d >= detailFar) && d < detailFar + 150))) {
             _sp.center.set(tm.cx, 60, tm.cz); _sp.radius = 200;
-            if (_fr.intersectsSphere(_sp)) {
-              if (tm.fac && !tm.warmF && !tm.near) { if (facB.warm(tm.i)) warmed = true; else tm.warmF = true; } // one buffer per frame
-              else if (detB.warm(tm.i)) warmed = true; else tm.warmD = true;
+            if (_fr.intersectsSphere((tm.fac && !tm.warmF ? facB.sphere(tm.i) : detB.sphere(tm.i)) || _sp)) {
+              if (tm.fac && !tm.warmF && (Q.mobile || !tm.near)) { if (facB.hasReady(tm.i) && facB.warm(tm.i)) { warmed = true; tm.gpuF = true; } else if (facB.hasReady(tm.i)) tm.warmF = true; } // one buffer per frame
+              else if (detB.hasReady(tm.i) && detB.warm(tm.i)) { warmed = true; tm.gpuD = true; } else if (detB.hasReady(tm.i)) tm.warmD = true;
             }
           }
         }
@@ -274,6 +301,7 @@ export async function buildCity({ scene, renderer }) {
   { const lim = bridgeLimits(groundHeight); world.bridgeLimit = (x, y, z) => lim.check(x, y, z); world.bridgeLimits = lim.list; } // (bridges r1)
   attachLife(world, { traffic, crowd: peds.crowd, pigeons: peds.pigeons }); // citylife: C3 hooks + world.life
   console.log(`[city] built in ${(performance.now() - t0).toFixed(0)} ms: ${gen.boxes.length} boxes, ${grid.n} solids, ${zips.count} zip points, rooftop refit ${fit.nInst} inst/${fit.nBox} fields/${(fit.cells / 1e6).toFixed(2)}M cells/-${fit.nDead} in ${(tFit2 - tFit).toFixed(0)} ms, ${gen.footprints.length} buildings, ${gen.tiles.size} tiles, ${far.count} far-shore boxes (${far.near} near, ${far.trees} trees), ${bridges.spans.length} bridges | ${TT.join(', ')}`);
+  world.streamer = streamer;
   return world;
 }
 

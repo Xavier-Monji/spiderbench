@@ -1,3 +1,5 @@
+import { getQuality } from '../render/quality.js';
+import { assetUrl } from '../platform/assets.js';
 // OWNER: coast agent (coast r1). The whole waterfront edge: Manhattan's seawall all round the island and the near far
 // shores (NJ, Queens / Brooklyn / Bronx, the islets) seen across the rivers.
 //
@@ -135,6 +137,7 @@ class CB {
     g.setAttribute('aTile', new THREE.Float32BufferAttribute(this.T, 1));
     g.setIndex(this.v > 65535 ? new THREE.Uint32BufferAttribute(this.I, 1) : new THREE.Uint16BufferAttribute(this.I, 1));
     g.computeBoundingSphere(); g.computeBoundingBox();
+    if (getQuality().mobile) { this.P = this.N = this.U = this.C = this.T = this.I = []; this.v = 0; }
     return g;
   }
 }
@@ -242,7 +245,7 @@ export function buildWaterfront({ scene, T, piers = [], pileFields = [], solids 
   // atlas: 1 px placeholder until the image arrives (texture loads retry, see textures.js)
   const ph = new THREE.DataTexture(new Uint8Array([128, 126, 122, 255]), 1, 1); ph.needsUpdate = true;
   const mat = createCoastMaterial(T, ph);
-  loadImageRetry('/assets/city/tex/coast_atlas.webp').then(im => {
+  loadImageRetry(assetUrl('/assets/city/tex/coast_atlas.webp')).then(im => {
     const tx = new THREE.Texture(im); tx.colorSpace = THREE.SRGBColorSpace; tx.anisotropy = 8; tx.generateMipmaps = true;
     tx.minFilter = THREE.LinearMipmapLinearFilter; tx.needsUpdate = true; mat.userData.uni.tAtlas.value = tx;
   }).catch(e => console.warn('[coast] atlas', e.message));

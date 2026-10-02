@@ -10,6 +10,7 @@
 // Plus: wet bands (dark, algae-stained tidal strip) along every bulkhead / seawall / pier edge, and a horizon skirt
 // just inside the far plane.
 import * as THREE from 'three';
+import { getQuality } from '../render/quality.js';
 import { G, distToShore, LAND_POLY } from './layout.js';
 import { FAR_LANDS } from './farshore.js';
 
@@ -255,7 +256,7 @@ function shoreMap() {
 }
 
 export function buildWater({ scene, T, renderer = null }) {
-  const mirror = renderer ? createMirror(renderer) : null;
+  const mirror = renderer && getQuality().planarReflections !== false ? createMirror(renderer) : null;
   let shore = null; try { shore = shoreMap(); } catch (e) { console.warn('[water] shore map', e); }
   const mat = createRiverMaterial(T, mirror, { shore });
   const WS = 300000;

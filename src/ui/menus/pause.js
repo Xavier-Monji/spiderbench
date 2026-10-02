@@ -15,7 +15,7 @@ export function createPauseMenu(sys) {
       <div class="tabs"><span class="qe"><span class="sys-key">Q</span></span><span class="tl"></span><span class="qe"><span class="sys-key">E</span></span></div>
       <div class="stats"><div class="xpcol"><div class="l"><span class="lv"></span><span class="xn"></span></div><div class="b"><i></i></div></div><div class="sp"></div></div></div>
     <div class="body"></div>
-    <div class="foot"><span class="left"></span><span class="hints"></span></div>`;
+    <div class="foot"><span class="left"></span><span class="hints"></span><button class="sys-btn resume-touch" aria-label="Resume game">Resume</button></div>`;
   ui.root.appendChild(el);
   const body = el.querySelector('.body'), tabsEl = el.querySelector('.tl'), hintsEl = el.querySelector('.hints'), leftEl = el.querySelector('.foot .left');
 
@@ -66,6 +66,7 @@ export function createPauseMenu(sys) {
     if (!toPhoto) { audio.sfx.close(); flow.setMode('play'); }
     window.__sysMenu = { open: false };
   }
+  el.querySelector('.resume-touch').addEventListener('click', () => close());
   function step(d) { let i = cur; do { i = (i + d + pages.length) % pages.length; } while (pages[i].action); select(i); }
 
   flow.onKey((e, mode) => {

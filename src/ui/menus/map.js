@@ -429,17 +429,21 @@ export function createMapPage(sys) {
   function hideCard() { card.classList.add('hide'); }
 
   const touch = () => { if (revealAnim) revealAnim.auto = false; };
-  for (const ev of ['mousedown', 'wheel']) cv.addEventListener(ev, touch);
-  cv.addEventListener('mousedown', e => { if (e.button === 0) { drag = { x: e.clientX, y: e.clientY, vx: view.x, vz: view.z, moved: false }; cv.classList.add('drag'); } });
-  addEventListener('mousemove', e => {
+  for (const ev of ['pointerdown', 'wheel']) cv.addEventListener(ev, touch);
+  cv.style.touchAction = 'none';
+  cv.addEventListener('pointerdown', e => { if (e.button === 0 && e.isPrimary !== false) {
+    e.preventDefault(); try { cv.setPointerCapture(e.pointerId); } catch {}
+    drag = { id: e.pointerId, x: e.clientX, y: e.clientY, vx: view.x, vz: view.z, moved: false }; cv.classList.add('drag'); } });
+  addEventListener('pointermove', e => {
+    if (drag && drag.id !== e.pointerId) return;
     if (!el.classList.contains('on')) return;
     const r = cv.getBoundingClientRect(); mouse = { x: e.clientX - r.left, y: e.clientY - r.top };
     if (drag) { const dx = e.clientX - drag.x, dy = e.clientY - drag.y; if (Math.hypot(dx, dy) > 4) drag.moved = true; view.x = drag.vx - dx / view.s; view.z = drag.vz - dy / view.s; clampView(); }
     const h = drag?.moved ? null : pick(mouse.x, mouse.y); if (h !== hover) { hover = h; if (h) audio.sfx.hover(); }
     dirty = true;
   });
-  addEventListener('mouseup', e => {
-    if (!drag) return; const d = drag; drag = null; cv.classList.remove('drag');
+  addEventListener('pointerup', e => {
+    if (!drag || drag.id !== e.pointerId) return; const d = drag; drag = null; cv.classList.remove('drag');
     if (d.moved || e.button !== 0 || !el.classList.contains('on')) return;
     const r = cv.getBoundingClientRect(); const mx = e.clientX - r.left, my = e.clientY - r.top;
     const it = pick(mx, my);
@@ -454,6 +458,7 @@ export function createMapPage(sys) {
     dirty = true;
   });
   cv.addEventListener('contextmenu', e => { e.preventDefault(); if (travel.waypoint) { travel.setWaypoint(null); dirty = true; } hideCard(); });
+  for (const ev of ['pointercancel', 'blur']) addEventListener(ev, () => { drag = null; cv.classList.remove('drag'); });
   cv.addEventListener('wheel', e => {
     e.preventDefault(); const r = cv.getBoundingClientRect(); const mx = e.clientX - r.left, my = e.clientY - r.top;
     const [wx, wz] = toW(mx, my); view.s *= Math.exp(-e.deltaY * 0.0015); clampView();

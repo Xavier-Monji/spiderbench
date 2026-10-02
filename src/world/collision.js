@@ -14,6 +14,8 @@
 //             groundHeight(x,z) WITHOUT a y ignores these (so walking under an awning never snaps you on top of it);
 //             groundHeight(x,z,y) and raycast always include them.
 import * as THREE from 'three';
+import { getQuality } from '../render/quality.js';
+import { indexedBuffer } from './indexed-buffer.js';
 
 export const BOX = 0, CYL = 1, RAMP = 2, HF = 3;
 export const OVERHANG = 1, NOZIP = 2, DEAD = 4; // DEAD: removed (never inserted into the grid)
@@ -27,7 +29,10 @@ export const KIND = ['wall', 'roof', 'parapet', 'coping', 'cornice', 'ledge', 'e
 const KID = Object.fromEntries(KIND.map((k, i) => [k, i]));
 
 export class Solids {
-  constructor() { this.t = []; this.b = []; this.p = []; this.f = []; this.k = []; this.fields = []; }
+  constructor({ compact = !!getQuality().mobile } = {}) {
+    for (const key of ['t', 'b', 'p', 'f', 'k']) this[key] = compact ? indexedBuffer(['b', 'p'].includes(key) ? Float32Array : Uint8Array) : [];
+    this.fields = [];
+  }
   _add(type, x0, y0, z0, x1, y1, z1, params, kind, flags) {
     this.t.push(type); this.b.push(x0, y0, z0, x1, y1, z1); this.p.push(...params);
     this.f.push(flags | 0); this.k.push(KID[kind] ?? 0);

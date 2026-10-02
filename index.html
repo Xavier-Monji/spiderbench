@@ -2,19 +2,21 @@
 <html lang="en">
 <head>
 <meta charset="utf-8" />
-<meta name="viewport" content="width=device-width,initial-scale=1" />
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
 <title>Spiderbench</title>
 <link rel="icon" href="data:," />
-<link rel="preload" as="image" href="/assets/loading/01.webp" fetchpriority="high" />
-<link rel="stylesheet" id="sys-fonts" href="/assets/ui/fonts/fonts.css" /><!-- the one fonts.css link (src/ui/fonts.js loadFonts() keeps it single) -->
+<link rel="preload" as="image" href="%BASE_URL%assets/loading/01.webp" fetchpriority="high" />
+<link rel="stylesheet" id="sys-fonts" href="%BASE_URL%assets/ui/fonts/fonts.css" /><!-- the one fonts.css link (src/ui/fonts.js loadFonts() keeps it single) -->
 <style>
-html,body{margin:0;height:100%;overflow:hidden;background:#000}canvas{display:block}
+html,body{margin:0;height:100%;overflow:hidden;background:#000;overscroll-behavior:none}canvas{display:block}
 /* ---- loading screen (shown before any script runs; driven by window.__boot, see below) ----
    Everything that moves is transform / opacity, so it keeps animating on the compositor while the city build blocks
    the main thread: the slideshow is pure CSS keyframes, the bar a long CSS transition toward the expected end of the
    current stage (durations remembered from the previous load on this machine). */
 #boot{--red:#e3262f;position:fixed;inset:0;z-index:1000;background:#040509;color:#f4f6fb;overflow:hidden;
   font-family:'Spiderbench Sans',Manrope,system-ui,sans-serif;transition:opacity .9s ease;cursor:progress;user-select:none}
+#boot.mobile figure{animation:none;display:none}#boot.mobile figure:first-child{display:block;opacity:1}
+#boot.mobile figure img{animation:none;will-change:auto}#boot.mobile .grain{display:none}
 #boot.out{opacity:0;pointer-events:none}
 #boot .slides{position:absolute;inset:0}
 #boot figure{position:absolute;inset:0;margin:0;opacity:0;animation:bootFade var(--T) linear infinite;animation-delay:calc(var(--i) * var(--S))}
@@ -68,12 +70,12 @@ html,body{margin:0;height:100%;overflow:hidden;background:#000}canvas{display:bl
 <div id="boot" role="progressbar" aria-label="Loading" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
   <div class="slides" style="--T:36s;--S:6s">
     <!-- in-game stills, no UI, graded by tools/loading_grade.py (captured with tools/loading_shots.mjs) -->
-    <figure style="--i:0;--o:45% 40%"><img src="/assets/loading/01.webp" alt="" decoding="async" /><figcaption>Midtown · Golden hour</figcaption></figure>
-    <figure style="--i:1;--o:48% 45%"><img src="/assets/loading/02.webp" alt="" decoding="async" /><figcaption>Times Square · Night</figcaption></figure>
-    <figure style="--i:2;--o:70% 60%"><img src="/assets/loading/03.webp" alt="" decoding="async" /><figcaption>Brooklyn Bridge · Sunrise</figcaption></figure>
-    <figure style="--i:3;--o:55% 60%"><img src="/assets/loading/04.webp" alt="" decoding="async" /><figcaption>Central Park · Morning</figcaption></figure>
-    <figure style="--i:4;--o:52% 55%"><img src="/assets/loading/05.webp" alt="" decoding="async" /><figcaption>Midtown · Noon</figcaption></figure>
-    <figure style="--i:5;--o:60% 65%"><img src="/assets/loading/06.webp" alt="" decoding="async" /><figcaption>East River · Dusk</figcaption></figure>
+    <figure style="--i:0;--o:45% 40%"><img src="%BASE_URL%assets/loading/01.webp" alt="" decoding="async" /><figcaption>Midtown · Golden hour</figcaption></figure>
+    <figure style="--i:1;--o:48% 45%"><img data-src="%BASE_URL%assets/loading/02.webp" alt="" decoding="async" /><figcaption>Times Square · Night</figcaption></figure>
+    <figure style="--i:2;--o:70% 60%"><img data-src="%BASE_URL%assets/loading/03.webp" alt="" decoding="async" /><figcaption>Brooklyn Bridge · Sunrise</figcaption></figure>
+    <figure style="--i:3;--o:55% 60%"><img data-src="%BASE_URL%assets/loading/04.webp" alt="" decoding="async" /><figcaption>Central Park · Morning</figcaption></figure>
+    <figure style="--i:4;--o:52% 55%"><img data-src="%BASE_URL%assets/loading/05.webp" alt="" decoding="async" /><figcaption>Midtown · Noon</figcaption></figure>
+    <figure style="--i:5;--o:60% 65%"><img data-src="%BASE_URL%assets/loading/06.webp" alt="" decoding="async" /><figcaption>East River · Dusk</figcaption></figure>
   </div>
   <div class="grain"></div>
   <div class="ui">
@@ -92,6 +94,12 @@ html,body{margin:0;height:100%;overflow:hidden;background:#000}canvas{display:bl
 (() => {
   const el = document.getElementById('boot');
   const q = new URLSearchParams(location.search);
+  const ipad = /iPad/i.test(navigator.userAgent) || (/Mac/i.test(navigator.platform) && navigator.maxTouchPoints > 1);
+  const mobile = q.get('q') === 'mobile' || window.__spiderbenchQuality === 'mobile' || ipad
+    || /Android|iPhone|iPod|Mobile/i.test(navigator.userAgent) || navigator.deviceMemory <= 4
+    || (matchMedia('(pointer:coarse)').matches && navigator.maxTouchPoints > 0);
+  el.classList.toggle('mobile', mobile);
+  if (!mobile) el.querySelectorAll('img[data-src]').forEach(im => { im.src = im.dataset.src; });
   const noop = () => Promise.resolve();
   if (q.has('shot') || q.has('playtest') || q.has('noboot')) { el.remove(); window.__boot = { stage: noop, sub() {}, done() {} }; return; }
   const LABELS = { boot: 'Starting', tex: 'Loading textures', gen: 'Laying out the streets', build: 'Raising the skyline',

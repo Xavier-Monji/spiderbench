@@ -1,9 +1,0 @@
-<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1"><style>body{margin:0;background:#263e58}canvas{width:100vw;height:100vh}.sys-menu{position:fixed;top:25%;left:25%;background:white;padding:40px}</style><canvas></canvas><script type="module">
-import { createInput } from '/src/player/input.js';
-import { createCombatInput } from '/src/game/combat/input.js';
-import { createTouchControls } from '/src/ui/touch-controls.js';
-const canvas = document.querySelector('canvas'), input = createInput(canvas);
-const ctx = { input, renderer: { domElement: canvas }, flow: { mode: 'play' }, combat: { engaged: false, input: createCombatInput() },
-  sys: { setInteractHeld(held) { ctx.interact = held; }, pause: { show(tab) { ctx.flow.mode = 'menu'; ctx.tab = tab; touch.update(); } } } };
-const touch = createTouchControls(ctx); window.fixture = { ctx, input, touch, poll: dt => input.poll(dt) };
-</script>

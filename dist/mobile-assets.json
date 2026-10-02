@@ -1,0 +1,494 @@
+{
+  "version": 1,
+  "files": [
+    {
+      "name": "city/tex/asphalt_col.png",
+      "bytesBefore": 7717233,
+      "bytesAfter": 2467320,
+      "before": [
+        2048,
+        2048
+      ],
+      "after": [
+        1024,
+        1024
+      ],
+      "gpuBefore": 22369622,
+      "gpuAfter": 5592406
+    },
+    {
+      "name": "city/tex/asphalt_nrm.png",
+      "bytesBefore": 7343343,
+      "bytesAfter": 2777870,
+      "before": [
+        2048,
+        2048
+      ],
+      "after": [
+        1024,
+        1024
+      ],
+      "gpuBefore": 22369622,
+      "gpuAfter": 5592406
+    },
+    {
+      "name": "city/tex/sidewalk_nrm.png",
+      "bytesBefore": 1964367,
+      "bytesAfter": 619699,
+      "before": [
+        1024,
+        1024
+      ],
+      "after": [
+        512,
+        512
+      ],
+      "gpuBefore": 5592406,
+      "gpuAfter": 1398102
+    },
+    {
+      "name": "city/tex/walls_col.jpg",
+      "bytesBefore": 6524847,
+      "bytesAfter": 1241821,
+      "before": [
+        1024,
+        16384
+      ],
+      "after": [
+        512,
+        8192
+      ],
+      "gpuBefore": 89478486,
+      "gpuAfter": 22369622
+    },
+    {
+      "name": "city/tex/walls_nrm.webp",
+      "bytesBefore": 6701010,
+      "bytesAfter": 1629340,
+      "before": [
+        512,
+        8192
+      ],
+      "after": [
+        256,
+        4096
+      ],
+      "gpuBefore": 22369622,
+      "gpuAfter": 5592406
+    },
+    {
+      "name": "city/tex/walls_hao.jpg",
+      "bytesBefore": 4742664,
+      "bytesAfter": 547593,
+      "before": [
+        512,
+        8704
+      ],
+      "after": [
+        256,
+        4352
+      ],
+      "gpuBefore": 23767723,
+      "gpuAfter": 5941931
+    },
+    {
+      "name": "city/tex/roof_col.png",
+      "bytesBefore": 4210128,
+      "bytesAfter": 1206906,
+      "before": [
+        512,
+        9728
+      ],
+      "after": [
+        256,
+        4864
+      ],
+      "gpuBefore": 26563926,
+      "gpuAfter": 6640982
+    },
+    {
+      "name": "city/tex/interiors.png",
+      "bytesBefore": 5886935,
+      "bytesAfter": 2218214,
+      "before": [
+        2048,
+        2048
+      ],
+      "after": [
+        1024,
+        1024
+      ],
+      "gpuBefore": 22369622,
+      "gpuAfter": 5592406
+    },
+    {
+      "name": "city/tex/grass_nrm.png",
+      "bytesBefore": 2153884,
+      "bytesAfter": 478423,
+      "before": [
+        1024,
+        1024
+      ],
+      "after": [
+        512,
+        512
+      ],
+      "gpuBefore": 5592406,
+      "gpuAfter": 1398102
+    },
+    {
+      "name": "city/tex/ts_ads.webp",
+      "bytesBefore": 4000086,
+      "bytesAfter": 5684238,
+      "before": [
+        4096,
+        4096
+      ],
+      "after": [
+        2048,
+        2048
+      ],
+      "gpuBefore": 89478486,
+      "gpuAfter": 22369622
+    },
+    {
+      "name": "city/tex/ts_pavers.webp",
+      "bytesBefore": 581088,
+      "bytesAfter": 810336,
+      "before": [
+        2048,
+        2048
+      ],
+      "after": [
+        1024,
+        1024
+      ],
+      "gpuBefore": 22369622,
+      "gpuAfter": 5592406
+    },
+    {
+      "name": "city/tex/ts_pavers_n.webp",
+      "bytesBefore": 862902,
+      "bytesAfter": 1047930,
+      "before": [
+        2048,
+        2048
+      ],
+      "after": [
+        1024,
+        1024
+      ],
+      "gpuBefore": 22369622,
+      "gpuAfter": 5592406
+    },
+    {
+      "name": "city/tex/ts_pavers_r.webp",
+      "bytesBefore": 200756,
+      "bytesAfter": 429750,
+      "before": [
+        2048,
+        2048
+      ],
+      "after": [
+        1024,
+        1024
+      ],
+      "gpuBefore": 22369622,
+      "gpuAfter": 5592406
+    },
+    {
+      "name": "city/tex/ts_signs.webp",
+      "bytesBefore": 490154,
+      "bytesAfter": 795380,
+      "before": [
+        2048,
+        2048
+      ],
+      "after": [
+        1024,
+        1024
+      ],
+      "gpuBefore": 22369622,
+      "gpuAfter": 5592406
+    },
+    {
+      "name": "city/tex/ts_shops.webp",
+      "bytesBefore": 90582,
+      "bytesAfter": 277794,
+      "before": [
+        2048,
+        1024
+      ],
+      "after": [
+        1024,
+        512
+      ],
+      "gpuBefore": 11184811,
+      "gpuAfter": 2796203
+    },
+    {
+      "name": "city/tex/vehicles_atlas2.webp",
+      "bytesBefore": 598766,
+      "bytesAfter": 842142,
+      "before": [
+        2048,
+        2048
+      ],
+      "after": [
+        1024,
+        1024
+      ],
+      "gpuBefore": 22369622,
+      "gpuAfter": 5592406
+    },
+    {
+      "name": "city/tex/coast_atlas.webp",
+      "bytesBefore": 1716832,
+      "bytesAfter": 1526434,
+      "before": [
+        2048,
+        2048
+      ],
+      "after": [
+        1024,
+        1024
+      ],
+      "gpuBefore": 22369622,
+      "gpuAfter": 5592406
+    },
+    {
+      "name": "city/npc/people_bake.webp",
+      "bytesBefore": 1962656,
+      "bytesAfter": 1719798,
+      "before": [
+        1920,
+        1280
+      ],
+      "after": [
+        960,
+        640
+      ],
+      "gpuBefore": 13107200,
+      "gpuAfter": 3276800
+    },
+    {
+      "name": "city/props/leaves_nrm.png",
+      "bytesBefore": 389492,
+      "bytesAfter": 301126,
+      "before": [
+        1024,
+        1024
+      ],
+      "after": [
+        512,
+        512
+      ],
+      "gpuBefore": 5592406,
+      "gpuAfter": 1398102
+    },
+    {
+      "name": "enemies/brute_basecolor.webp",
+      "bytesBefore": 187550,
+      "bytesAfter": 231066,
+      "before": [
+        2048,
+        2048
+      ],
+      "after": [
+        1024,
+        1024
+      ],
+      "gpuBefore": 22369622,
+      "gpuAfter": 5592406
+    },
+    {
+      "name": "tex/thug_basecolor_b.webp",
+      "bytesBefore": 263180,
+      "bytesAfter": 334436,
+      "before": [
+        2048,
+        2048
+      ],
+      "after": [
+        1024,
+        1024
+      ],
+      "gpuBefore": 22369622,
+      "gpuAfter": 5592406
+    },
+    {
+      "name": "tex/thug_basecolor_c.webp",
+      "bytesBefore": 271620,
+      "bytesAfter": 352062,
+      "before": [
+        2048,
+        2048
+      ],
+      "after": [
+        1024,
+        1024
+      ],
+      "gpuBefore": 22369622,
+      "gpuAfter": 5592406
+    },
+    {
+      "name": "tex/suit_normal.png",
+      "bytesBefore": 19042871,
+      "bytesAfter": 836090,
+      "before": [
+        4096,
+        4096
+      ],
+      "after": [
+        1024,
+        1024
+      ],
+      "gpuBefore": 89478486,
+      "gpuAfter": 5592406
+    },
+    {
+      "name": "tex/thug_basecolor.png",
+      "bytesBefore": 2944940,
+      "bytesAfter": 606123,
+      "before": [
+        2048,
+        2048
+      ],
+      "after": [
+        1024,
+        1024
+      ],
+      "gpuBefore": 22369622,
+      "gpuAfter": 5592406
+    },
+    {
+      "name": "tex/thug_basecolor_b.png",
+      "bytesBefore": 3134439,
+      "bytesAfter": 663808,
+      "before": [
+        2048,
+        2048
+      ],
+      "after": [
+        1024,
+        1024
+      ],
+      "gpuBefore": 22369622,
+      "gpuAfter": 5592406
+    },
+    {
+      "name": "tex/thug_basecolor_c.png",
+      "bytesBefore": 3116126,
+      "bytesAfter": 651014,
+      "before": [
+        2048,
+        2048
+      ],
+      "after": [
+        1024,
+        1024
+      ],
+      "gpuBefore": 22369622,
+      "gpuAfter": 5592406
+    },
+    {
+      "name": "spiderman.glb",
+      "bytesBefore": 10338708,
+      "bytesAfter": 8060712,
+      "images": [
+        {
+          "name": "suit_normal",
+          "before": [
+            4096,
+            4096
+          ],
+          "after": [
+            1024,
+            1024
+          ],
+          "gpuBefore": 89478486,
+          "gpuAfter": 5592406
+        },
+        {
+          "name": "suit_orm",
+          "before": [
+            4096,
+            4096
+          ],
+          "after": [
+            512,
+            512
+          ],
+          "gpuBefore": 89478486,
+          "gpuAfter": 1398102
+        },
+        {
+          "name": "suit_basecolor",
+          "before": [
+            4096,
+            4096
+          ],
+          "after": [
+            2048,
+            2048
+          ],
+          "gpuBefore": 89478486,
+          "gpuAfter": 22369622
+        }
+      ],
+      "gpuBefore": 268435458,
+      "gpuAfter": 29360130
+    },
+    {
+      "name": "thug.glb",
+      "bytesBefore": 3666288,
+      "bytesAfter": 3519856,
+      "images": [
+        {
+          "name": "thug_normal",
+          "before": [
+            2048,
+            2048
+          ],
+          "after": [
+            512,
+            512
+          ],
+          "gpuBefore": 22369622,
+          "gpuAfter": 1398102
+        },
+        {
+          "name": "thug_orm",
+          "before": [
+            2048,
+            2048
+          ],
+          "after": [
+            512,
+            512
+          ],
+          "gpuBefore": 22369622,
+          "gpuAfter": 1398102
+        },
+        {
+          "name": "thug_basecolor",
+          "before": [
+            2048,
+            2048
+          ],
+          "after": [
+            1024,
+            1024
+          ],
+          "gpuBefore": 22369622,
+          "gpuAfter": 5592406
+        }
+      ],
+      "gpuBefore": 67108866,
+      "gpuAfter": 8388610
+    }
+  ],
+  "gpuBefore": 1053294612,
+  "gpuAfter": 200409108,
+  "mobileOnly": true
+}

@@ -4,17 +4,21 @@ import { chromium } from 'playwright';
 import assert from 'node:assert/strict';
 import { readFile, mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
+import { isStreamBufferAbort } from './cdn-media.mjs';
 const info = JSON.parse(await readFile('deployment/build-info.json', 'utf8'));
 const uri = (await readFile('deployment/launcher.data-uri.txt', 'utf8')).trim();
 const live = process.env.CDN_LIVE === '1';
-const errors = [], failed = [], requests = [], responses = [];
+const errors = [], failed = [], abortedMedia = [], requests = [], responses = [];
 const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || undefined,
   args: ['--no-sandbox', '--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--enable-precise-memory-info'] });
 const page = await browser.newPage({ viewport: { width: 1180, height: 820 }, deviceScaleFactor: 2, hasTouch: true,
   userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15) AppleWebKit/605.1.15 Version/18.0 Mobile/15E148 Safari/604.1' });
 page.on('pageerror', e => errors.push(e.message));
 page.on('console', m => { if (m.type() === 'error') errors.push(m.text()); });
-page.on('requestfailed', r => failed.push([r.url(), r.failure()?.errorText]));
+page.on('requestfailed', r => {
+  const failure = { url: r.url(), error: r.failure()?.errorText, resourceType: r.resourceType() };
+  (isStreamBufferAbort(failure, info.base) ? abortedMedia : failed).push(failure);
+});
 page.on('request', r => { if (r.url().startsWith('https://cdn.jsdelivr.net/')) requests.push(r.url()); });
 page.on('response', r => {
   if (!r.url().startsWith('https://cdn.jsdelivr.net/')) return;
@@ -38,6 +42,9 @@ if (!live) await page.route('https://cdn.jsdelivr.net/**', async route => {
   } catch { errors.push('Missing built asset ' + name); await route.fulfill({ status: 404, body: 'Missing asset' }); }
 });
 await page.addInitScript(() => { let ctx;
+  window.__smokeMedia = new Set();
+  const play = HTMLMediaElement.prototype.play;
+  HTMLMediaElement.prototype.play = function (...args) { window.__smokeMedia.add(this); return play.apply(this, args); };
   Object.defineProperty(window, '__ctx', { get: () => ctx, set: value => { ctx = value; ctx.manualStep = true; } });
 });
 let stats;
@@ -96,6 +103,15 @@ try {
   stats.portraitSize = await page.evaluate(() => __ctx.pipeline.size);
   assert.ok(stats.portraitSize.W * stats.portraitSize.H <= 1000000);
   await page.screenshot({ path: 'artifacts/cdn-mobile-portrait.png', timeout: 90000 });
+  // Validate the actual streamed elements, not just the request lifecycle: normal buffering/seek cancellations
+  // are not broken audio. HTTP/CORS/decoder/network failures still fail this test.
+  await page.waitForFunction(() => __ctx.sys.audio.state().stems.length === 4
+    && [...window.__smokeMedia].filter(a => a.src.includes('/assets/audio/music_')).length === 4
+    && [...window.__smokeMedia].every(a => !a.error && a.readyState >= 2 && !a.paused), null, { timeout: 30000 });
+  stats.audio = await page.evaluate(() => ({ ...__ctx.sys.audio.state(), media: [...window.__smokeMedia].map(a =>
+    ({ src: a.currentSrc, readyState: a.readyState, paused: a.paused, time: a.currentTime, error: a.error?.message || null })) }));
+  assert.equal(stats.audio.loadErr, null); assert.equal(stats.audio.ctx, 'running');
+  assert.ok(stats.audio.media.every(a => a.time > 0));
   assert.deepEqual(errors, []); assert.deepEqual(failed, []);
   assert.ok(responses.some(r => r.url === info.entry && r.status === 200));
   assert.ok(responses.some(r => /\.js$/.test(r.url) && r.status === 200));
@@ -105,6 +121,6 @@ try {
   await mkdir('artifacts', { recursive: true });
   const boot = await page.evaluate(() => ({ label: document.querySelector('#boot .lbl')?.textContent,
     message: document.querySelector('#boot .msg')?.textContent, fallback: window.__ctx ? undefined : document.body.innerText.slice(0, 2000) })).catch(() => null);
-  await writeFile('artifacts/cdn-smoke.json', JSON.stringify({ mode: live ? 'live' : 'mocked', base: info.base, stats, boot, errors, failed, requests, responses }, null, 2));
+  await writeFile('artifacts/cdn-smoke.json', JSON.stringify({ mode: live ? 'live' : 'mocked', base: info.base, stats, boot, errors, failed, abortedMedia, requests, responses }, null, 2));
   await browser.close();
 }

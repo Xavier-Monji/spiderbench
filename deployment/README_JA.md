@@ -107,7 +107,7 @@ npm run test:cdn            # ローカルdistでCDNを模擬した全ゲーム�
 CDN_LIVE=1 npm run test:cdn  # 公開済みjsDelivrのみから実ゲームを読み込むライブ検証
 ```
 
-- `npm test` **24件**、`test:browser` **8件**、全ゲーム `test:cdn` の起動／操作検証が成功。
+- `npm test` **25件**、`test:browser` **8件**、全ゲーム `test:cdn` の起動／操作検証が成功。
 - Chromium153 + SwiftShader、1180×820 / DPR2 のタッチ環境で検証。**UA を Safari にしていても Safari エンジンの検証ではありません。**
 - デフォルトのData URI統合テストはCDN応答をローカル `dist/` で模擬します。`CDN_LIVE=1` は応答を差し替えず、実際のCDNからHTML／モジュール／画像／モデルを取得します。JSONレポートの `mode` で両者を区別します。
 - 本番のネイティブ画素予算は1199×833 ≤100万画素で確認。ソフトウェアGPUでの全都市画像キャプチャは `SMOKE_SCALE=0.35` に下げます（`SMOKE_SCALE=0.85 npm run test:cdn` で既定解像度のキャプチャ）。これは本番のスケール下限設定を変えません。

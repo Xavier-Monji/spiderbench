@@ -2241,7 +2241,7 @@ export async function buildRooftops({ scene, gen, facadeMat, T, renderer, extraR
     if (Q.mobile) await new Promise(resolve => setTimeout(resolve, 0));
   }
   const ctr = meshes.map(t => [t.cx, t.cz]);
-  const rbB = batchTiles(rbG, mat, 'roofs', { castShadow: true, receiveShadow: true, smallCasters: true, merge: false }, ctr); // csm: keep out of the far cascades
+  const rbB = batchTiles(rbG, mat, 'roofs', { castShadow: true, receiveShadow: true, smallCasters: true, merge: false, renderer: Q.mobile ? renderer : null }, ctr); // csm: keep out of the far cascades
   const aoB = batchTiles(aoG, aoMat, 'roofAO', { renderOrder: 1, merge: !Q.mobile }, ctr);
   const skB = batchTiles(skG, skMat, 'roofStreaks', { renderOrder: 1, merge: !Q.mobile }, ctr);
   for (const b of [rbB, aoB, skB]) for (const m of b.meshes) scene.add(m);

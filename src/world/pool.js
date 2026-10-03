@@ -3,6 +3,7 @@
 import * as THREE from 'three';
 import { getQuality } from '../render/quality.js';
 import { csmShared } from '../render/csm.js';
+import { cacheStaticTransform } from '../render/static-transforms.js';
 import { perf2Off } from './tilebatch.js'; // (perf r2) A/B switch
 const NOWEDGE = perf2Off('nowedge');
 const REUSE_CANDIDATES = !perf2Off('noruntimecache');
@@ -86,7 +87,7 @@ export class Pool {
     this.items = []; // {x,y,z,ry,s,sx?,sy?,sz?,color?,extra:{}}
     this.extraDefs = extra;
     this.mesh = new THREE.InstancedMesh(geo, mat, max);
-    this.mesh.name = name;
+    this.mesh.name = name; if (Q.mobile) cacheStaticTransform(this.mesh);
     this.mesh.count = 0;
     this.mesh.frustumCulled = false;
     this.mesh.castShadow = castShadow; this.mesh.receiveShadow = receiveShadow;

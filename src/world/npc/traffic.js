@@ -8,6 +8,7 @@
 //  * rendering: 3 instanced tiers per vehicle type (Blender model < 90 m, procedural low-poly < 250 m, proxy box
 //    beyond), CPU frustum culling, brake lights via per-instance state.
 import * as THREE from 'three';
+import { poseAlpha, lerpAngle } from './cadence.js';
 import { getQuality } from '../../render/quality.js';
 import { G, mulberry32, hash2, islandNear, bikeLaneAt, DIAG_SEGS, diagD } from '../layout.js'; // (layout2 r3) islandNear, bikeLaneAt
 import { connector, connAt, mapPhase, bridgeJunctions } from './roads.js';
@@ -371,7 +372,9 @@ export function createTraffic({ scene, roads, phase, geos, mats, models = null, 
     activeLinks.length = 0; parkedLinks.length = 0;
     for (const L of links) {
       const d2 = segDist2(L, cam.x, cam.z) * (L.bridge ? 0.75 : 1); // (citylife bridges) decks stream to 1.15x the radius (seen from afar; LOD2 beyond 230 m)
-      L.far = d2 > 330 * 330 ? 2 : d2 > 200 * 200 ? 1 : 0; // (citylife bridges) step tiers: every frame / 2nd / 4th
+      L.far = MOBILE && !perf2Off('legacytrafficrate')
+        ? (segDist2(L, player.pos.x, player.pos.z) < 60 * 60 ? 0 : d2 > 330 * 330 ? 2 : d2 > 96 * 96 ? 1 : 0)
+        : d2 > 330 * 330 ? 2 : d2 > 200 * 200 ? 1 : 0; // (citylife bridges) step tiers: every frame / 2nd / 4th
       if (!L.active && d2 < R2) { L.active = true; populate(L); }
       else if (L.active && d2 > R2o) {
         L.active = false;
@@ -550,6 +553,11 @@ export function createTraffic({ scene, roads, phase, geos, mats, models = null, 
     for (const L of (cacheLinks ? activeLinks : links)) {
       if (!L.active || (far !== null && L.far !== far)) continue;
       const arr = L.cars, n = arr.length;
+      if (MOBILE && !perf2Off('legacytrafficrate')) for (const c of arr) {
+        if (!c._placed) { placeCar(c); c._placed = true; }
+        const m = c._motion ??= {};
+        m.x=c.x;m.y=c.y;m.z=c.z;m.ry=c.ry;m.pitch=c.pitch;m.at=time;m.interval=L.far?dt:0;
+      }
       const light = L.signal ? (L.mapSig ? mapPhase(time, L.axis) : L.axis === 'av' ? lightAv : lightSt) : 2;
       for (let i = n - 1; i >= 0; i--) {
         const c = arr[i];
@@ -852,7 +860,7 @@ export function createTraffic({ scene, roads, phase, geos, mats, models = null, 
     cao.begin(); hlp.begin(); // (street r7) (daynight)
     const cp = camera.position;
     camera.updateMatrixWorld();
-    pv.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse); frustum.setFromProjectionMatrix(pv); frustumOk = true;
+    pv.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse); frustum.setFromProjectionMatrix(pv, camera.coordinateSystem, camera.reversedDepth); frustumOk = true;
     const emit = (c, moving) => {
       const dx = c.x - cp.x, dz = c.z - cp.z, d2 = dx * dx + dz * dz;
       if (clear) {
@@ -871,7 +879,15 @@ export function createTraffic({ scene, roads, phase, geos, mats, models = null, 
       if (tier !== 'far') cao.push(c.x, c.z, c.ry, VTYPES[c.type].len, VTYPES[c.type].wid); // (street r7)
       if (moving && d2 < 250 * 250) hlp.push(c.x, c.z, c.ry, VTYPES[c.type].len); // (daynight) headlight pool
     };
-    for (const c of cars) { placeCar(c); emit(c, true); }
+    for (const c of cars) {
+      placeCar(c);
+      const x=c.x,y=c.y,z=c.z,ry=c.ry,pitch=c.pitch;
+      if (MOBILE && !perf2Off('legacytrafficrate') && c._motion?.interval > 0) {
+        const m=c._motion, alpha=poseAlpha(time,m.at,m.interval);
+        c.x=m.x+(x-m.x)*alpha;c.y=m.y+(y-m.y)*alpha;c.z=m.z+(z-m.z)*alpha;c.ry=lerpAngle(m.ry,ry,alpha);c.pitch=m.pitch+(pitch-m.pitch)*alpha;
+      }
+      emit(c, true); c.x=x;c.y=y;c.z=z;c.ry=ry;c.pitch=pitch;
+    }
     for (const L of (cacheLinks ? parkedLinks : links)) {
       if (!L.parked || !L.parked.length) continue;
       const dx = L.cx - cp.x, dz = L.cz - cp.z;

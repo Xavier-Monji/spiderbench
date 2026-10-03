@@ -1,0 +1,27 @@
+{
+  "source": "User-provided device performance report",
+  "reportedGameplayFps": [6, 10],
+  "reportedWorstFps": [1, 2],
+  "artifactCommit": "6ed0d3939db019e2d7432371d9aee83eafe3d97d",
+  "report": {
+    "format": "spiderbench-performance-v1",
+    "time": "2026-10-03T05:19:08.813Z",
+    "mode": "play",
+    "frame": {"samples":7,"fps":3.264925373134328,"cpuMs":119.85714285712622,"submitMs":50.000000000016634,"p95Ms":1407,"maxMs":1407,"longFrames":7},
+    "gpu":{"available":false,"timings":{"total":null}},
+    "render":{"calls":291,"triangles":3730541},
+    "resolution":{"scale":0.5,"W":737,"H":430,"pixels":316910},
+    "stream":{"tiles":926,"ready":18,"recipeBytes":92312876,"residentBytes":65984172,"peakResidentBytes":67077324,"maxResidentBytes":67108864,"worker":{"state":"ready","started":461,"completed":461,"cancelled":0,"failed":0,"pending":0,"error":null}},
+    "poseAtlas":{"people":398,"bakedFrames":2124,"reusedFrames":0,"bytes":933888,"capacity":1024,"supported":true,"disabled":false},
+    "device":{"userAgent":"Mozilla/5.0 (iPad; CPU OS 26_2_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/155.0.8059.24 Mobile/15E148 Safari/604.1","dpr":2,"renderer":"WebKit WebGL","webglVersion":"WebGL 2.0","cpuCoresReported":4},
+    "caveat":"FPS comes from real-time gameplay frame submission intervals, not a synthetic CPU reciprocal or confirmed display swaps. CPU excludes GL submission; submit is JavaScript API time, not GPU time. GPU unavailable means no timer extension, NOT zero GPU cost."
+  },
+  "interpretation": {
+    "cpuUpdateExceeds33msBudget": true,
+    "submitIsNotMeasuredGpuTime": true,
+    "resolutionAlreadyAtFloor": true,
+    "workerAndPoseCacheAreActive": true,
+    "cacheChurnIsSuspectedFromBudgetPressureNotProvenByThisSingleSampleAlone": true,
+    "newBuild30fpsOnPhysicalDeviceVerified": false
+  }
+}

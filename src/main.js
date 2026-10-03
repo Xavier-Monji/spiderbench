@@ -30,6 +30,7 @@ import { createGeometryWorker } from './world/geometry-worker.js';
 import { createCrowdPoseAtlas } from './render/crowd-poses.js';
 import { FrameTelemetry } from './render/frame-telemetry.js';
 import { createPerformancePanel } from './ui/performance.js';
+import { cacheStaticTransform } from './render/static-transforms.js';
 
 const params = new URLSearchParams(location.search);
 const shotName = params.get('shot');
@@ -58,6 +59,7 @@ document.body.appendChild(renderer.domElement);
 
 let ctxBoxCulling = null;
 const scene = new THREE.Scene();
+if (quality.mobile) cacheStaticTransform(scene);
 // far plane 150 km (foundation agent): the harbour, far shores and distant hinterland run out to the (fogged) true
 // horizon instead of being clipped into a hard band at 6 km (reversed float depth keeps precision at this range)
 const camera = new THREE.PerspectiveCamera(55, innerWidth / innerHeight, 0.1, quality.cameraFar ?? 150000);
@@ -103,7 +105,7 @@ contextMessage.addEventListener('click', () => location.reload()); document.body
 renderer.domElement.addEventListener('webglcontextlost', e => { e.preventDefault(); contextLost = true;
   input.clear(); touchControls?.clear(); resolution.reset(); ctx.telemetry.reset(); contextMessage.style.display = 'block'; });
 renderer.domElement.addEventListener('webglcontextrestored', () => { contextLost = false;
-  pipeline.resetHistory?.(); resolution.resize(); contextMessage.style.display = 'none'; });
+  world.streamer?.resetGpu(); pipeline.resetHistory?.(); resolution.resize(); contextMessage.style.display = 'none'; });
 document.addEventListener('visibilitychange', () => { input.clear(); touchControls?.clear(); resolution.reset(); ctx.telemetry.reset(); });
 // (perf r3) queue every shader program the game can draw (main pass + the river mirror's unshadowed variant + the
 // post passes) before the first frame: they link in parallel on the driver's threads during the loading frame instead

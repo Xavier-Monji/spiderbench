@@ -34,7 +34,9 @@ import { buildRooftops } from './rooftops.js';
 import { buildSignage } from './signage.js'; // billboards: city-wide signage
 import { attachLife } from './npc/life.js';
 import { applyDistanceFade } from './pool.js';
-import { batchTiles } from './tilebatch.js'; // (perf)
+import { batchTiles } from './tilebatch.js';
+import { beginStreamUploads } from '../render/stream-uploads.js';
+import { cacheStaticTransform } from '../render/static-transforms.js'; // (perf)
 
 export async function buildCity({ scene, renderer }) {
   const Q = getQuality();
@@ -90,7 +92,7 @@ export async function buildCity({ scene, renderer }) {
   await tick('gen', 'build');
   const sqd = dressSquares(gen, blocks); console.log('[city] (layout2 r4) square dressing', JSON.stringify(sqd)); // Broadway bow-tie plazas
   const heroRect = gen.excluded[0] ? { ...gen.excluded[0], x0: HERO_RECT.x0 } : HERO_RECT;
-  root = new THREE.Group(); root.name = 'city';
+  root = new THREE.Group(); root.name = 'city'; if (Q.mobile) cacheStaticTransform(root);
   scene.add(root);
   buildStandalone({ scene: root, gen, T }); // citygeo: Grand Central, Times-Square screens (writes into the tile builders)
   buildTimesSquare({ scene: root, gen }); // timessq: screens, plazas, TKTS steps, One-Times-Square tower (writes into the tile builders)
@@ -113,9 +115,9 @@ export async function buildCity({ scene, renderer }) {
     if (Q.mobile) await new Promise(resolve => setTimeout(resolve, 0));
   }
   const ctr = tileMeshes.map(t => [t.cx, t.cz]);
-  const facB = batchTiles(facG, facadeMat, 'facade', { castShadow: true, receiveShadow: true, merge: false }, ctr); // (perf) big: per tile
+  const facB = batchTiles(facG, facadeMat, 'facade', { castShadow: true, receiveShadow: true, merge: false, renderer: Q.mobile ? renderer : null }, ctr); // (perf) big: per tile
   const lodB = batchTiles(lodG, facadeMat, 'facadeLod', { castShadow: true, receiveShadow: true }, ctr);
-  const detB = batchTiles(detG, detailMat, 'detail', { castShadow: true, receiveShadow: true, merge: false }, ctr);
+  const detB = batchTiles(detG, detailMat, 'detail', { castShadow: true, receiveShadow: true, merge: false, renderer: Q.mobile ? renderer : null }, ctr);
   for (const b of [facB, lodB, detB]) for (const m of b.meshes) root.add(m);
   for (const tm of tileMeshes) if (tm.lod) lodB.setVisible(tm.i, false);
   await tick('tiles', 'ground');
@@ -255,12 +257,15 @@ export async function buildCity({ scene, renderer }) {
     textures: T,
     materials: { facade: facadeMat },
     update(dt, camera) {
+      beginStreamUploads(renderer);
+      const meter = globalThis.__ctx?.telemetry;
+      const measure = (name, fn) => { if (!meter) return fn(); const t = performance.now(); fn(); meter.part(name, performance.now() - t); };
       time += dt;
       const P0_ = world.prof, g0_ = P0_ ? performance.now() : 0; // (perf r3) + ground (river mirror) / boats / highways / hero mirror
-      ground.update(dt, camera);
+      measure('world.ground', () => ground.update(dt, camera));
       const g1_ = P0_ ? performance.now() : 0;
-      boats.update(dt);
-      highways.update(dt, camera);
+      measure('world.boats', () => boats.update(dt));
+      measure('world.highways', () => highways.update(dt, camera));
       if (P0_) { const g2_ = performance.now(), a_ = (k, v) => { P0_[k] = (P0_[k] ?? v) * 0.95 + v * 0.05; P0_[k + 'Max'] = Math.max(P0_[k + 'Max'] || 0, v); }; a_('ground', g1_ - g0_); a_('highways', g2_ - g1_); }
       // (citylife bridges) bridgeTraffic.update removed: see npc/traffic.js
       // foundation: the island now has real far shores -> retire the sky's procedural distant-skyline band (once)
@@ -274,13 +279,13 @@ export async function buildCity({ scene, renderer }) {
         if (P0_) { const v = performance.now() - h0_; P0_.hero = (P0_.hero ?? v) * 0.95 + v * 0.05; P0_.heroMax = Math.max(P0_.heroMax || 0, v); }
         geoDebug.update(camera);
         const P_ = world.prof, t0_ = P_ ? performance.now() : 0; // citylife: optional per-system CPU profile (world.prof = {})
-        props.update(dt, cp, time);
+        measure('world.props', () => props.update(dt, cp, time));
         const t1_ = P_ ? performance.now() : 0;
-        trees.update(dt, cp);
-        flags.update(dt, cp);
-        streamer?.update(cp);
-        rooftops.update(camera);
-        signage.update(cp); // billboards: per-cell distance culling
+        measure('world.trees', () => trees.update(dt, cp));
+        measure('world.flags', () => flags.update(dt, cp));
+        measure('world.stream', () => streamer?.update(cp, undefined, camera));
+        measure('world.roofs', () => rooftops.update(camera));
+        measure('world.signage', () => signage.update(cp)); // billboards: per-cell distance culling
         const t2_ = P_ ? performance.now() : 0;
         let clear = null;
         if (shotMode && !forced) {
@@ -288,9 +293,9 @@ export async function buildCity({ scene, renderer }) {
           camera.getWorldDirection(_dir); _dir.y = 0; _dir.normalize();
           clear = { pos: cp, dir: _dir, len: 32, half: 2.2 };
         }
-        traffic.update(Math.min(dt, 0.1), camera, time, clear);
+        measure('world.traffic', () => traffic.update(Math.min(dt, 0.1), camera, time, clear));
         const t3_ = P_ ? performance.now() : 0;
-        peds.update(Math.min(dt, 0.1), camera);
+        measure('world.crowd', () => peds.update(Math.min(dt, 0.1), camera));
         if (P_) { const t4_ = performance.now(), a_ = (k, v) => { P_[k] = (P_[k] ?? v) * 0.95 + v * 0.05; P_[k + 'Max'] = Math.max(P_[k + 'Max'] || 0, v); }; a_('props', t1_ - t0_); a_('trees', t2_ - t1_); a_('traffic', t3_ - t2_); a_('peds', t4_ - t3_); }
         facB.endWarm(); detB.endWarm(); // (perf r2) restore last frame's pre-upload tile
         let warmed = false; if (!_fr) { _fr = new THREE.Frustum(); _pm = new THREE.Matrix4(); _sp = new THREE.Sphere(); }

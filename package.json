@@ -14,7 +14,8 @@
     "test:cdn": "node scripts/smoke-cdn.mjs",
     "archive:cdn": "node scripts/archive-cdn.mjs",
     "profile:startup": "node scripts/profile-startup.mjs",
-    "profile:runtime": "node scripts/profile-runtime.mjs"
+    "profile:runtime": "node scripts/profile-runtime.mjs",
+    "profile:swing": "node scripts/profile-swing.mjs"
   },
   "dependencies": {
     "fflate": "^0.8.3",

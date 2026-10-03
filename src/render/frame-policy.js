@@ -24,14 +24,19 @@ export function createFramePolicy(ctx, { enabled = ctx.quality?.mobile && !new U
 export function stepGameFrame(ctx, dt) {
   const policy = ctx.framePolicy;
   const clock = ctx.telemetry, start = clock ? performance.now() : 0;
-  const updateWorld = () => { ctx.player.update(dt); ctx.world.update(dt, ctx.camera); ctx.lighting.update(ctx.camera); ctx.hud.update(dt); };
+  clock?.beginFrame();
+  const timed = (name, fn) => { if (!clock) return fn(); const t = performance.now(); fn(); clock.part(name, performance.now() - t); };
+  const updateWorld = () => {
+    timed('player', () => ctx.player.update(dt)); timed('world', () => ctx.world.update(dt, ctx.camera));
+    timed('lighting', () => ctx.lighting.update(ctx.camera)); timed('hud', () => ctx.hud.update(dt));
+  };
   let updated = !policy || policy.needsWorldFrame();
   if (updated) updateWorld();
-  for (const s of ctx.systems) s.update?.(dt);
+  timed('systems', () => { for (const s of ctx.systems) s.update?.(dt); });
   if (!updated && policy.needsWorldFrame()) { updateWorld(); updated = true; }
   if (clock) clock.cpu(performance.now() - start);
   const submitStart = clock ? performance.now() : 0;
-  if (updated) { ctx.pipeline.render(dt); ctx.warmup?.step(); policy?.rendered(); }
+  if (updated) { ctx.pipeline.render(dt); timed('shaderWarmup', () => ctx.warmup?.step()); policy?.rendered(); }
   else { ctx.pipeline.present(); policy.presented(); }
   if (clock) clock.submit(performance.now() - submitStart);
 }

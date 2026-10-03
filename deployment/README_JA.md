@@ -13,6 +13,8 @@
 - `deployment/build-info.json`: 実際のCDN URL、バイト数、公開・検証状態。
 - `deployment/release.json`: 配信専用コミットの40桁SHAとGitツリー、アセット総サイズ。
 - `deployment/live-verification.json`: 実CDNから起動したブラウザ検証の結果と公開CIへのリンク。
+- `deployment/a14-device-report.json`: ユーザー提供の実機ログ（更新CPU約120 ms、GL提出約50 ms、GPU時間未対応、下限解像度）。
+- `deployment/working-set.json`: 実機ログに基づくキャッシュ再構築ループ・分割VBO転送・遠方AI更新の対策とソフトウェア再現結果。
 - `deployment/frame-budget.json`: 低FPS対策・ワーカー・GPU骨キャッシュ・適応解像度の検証（A14実機30fpsの認定ではありません）。
 - `deployment/runtime-performance.json`: A14向け実行時最適化の比較CPU計測・ピクセル同一性・機能回帰検証（実機FPSではありません）。
 - `deployment/startup-memory.json`: 初期読み込みクラッシュ対策前後のソフトウェアブラウザ計測（実機認定ではありません）。
@@ -54,6 +56,21 @@
 
 対象テクスチャのミップ付き RGBA **理論値**は約1004.5 → 191.1 MiB（約81%減）。これは GPU／RAM 実測値でも全アセットの合計でもありません。ビルドの `dist/mobile-assets.json` に寸法・レイヤー数・画像／GLBサイズを記録します。
 
+## 2026-10-03: 実機CPUログに基づく追加対策
+
+実機ログは通常6～10fps、最悪1～2fps。更新CPU **119.86 ms**、GL提出 **50 ms**、内部解像度は既に下限（316,910画素）、GPUタイマーはN/Aです。CPUだけでも30fpsの33 ms枠を超えるので、さらに解像度を落とす対策ではありません。ワーカー／GPU骨キャッシュは実機で動作していました。
+
+- キャッシュが満杯でも、復元完了した遠い街区を受け入れるために近い常駐街区を追い出す問題を修正。距離・役割・視野・ヒステリシスで入場を決め、重要度の低い候補は構築前／採用前に止めます。スケジューラは100 ms単位、急な移動は即再評価。64 MiB枠は増やしません。
+- 元の「1属性ずつ」GPU準備でも属性全体のbufferDataが一括だったため、VBOを先に確保して **全バッチ合計256 KiB／フレーム以下** のCOPY_WRITE分割転送へ。ファサード・屋上・装飾に公平な枠を設け、完了まで既存LODを使用。位置／index／half／normalized属性はそのまま。indexの初期バインド種別、VAO状態、退去時の解放、context復帰のレシピ再生も検証します。
+- 遠方NPCの判断処理は10／5／2.5 Hzへ、画面外の処理も抑制し、位置・向き・首を描画周期で補間。近傍16 m、プレイヤー付近、反応中／危険／着地付近は即時更新。人数・モデル・クリップは削りません。個体間の空間分離は15 Hz、プレイヤー回避は近傍の即時処理を維持。
+- 交通はプレイヤー60 m／カメラ96 m近傍を毎回更新し、中距離の判断を15 Hzへ。描画位置だけを補間し、車との動的衝突の位置は最新の論理状態です。車の数を減らす手法ではありません。
+- 同じ静的行列を毎パス再合成してシーン全体をdirtyにしないようキャッシュ。後からposition／rotation／scaleを変更するAPIは維持。
+- COPY REPORTを **v2** に。CPUのplayer／world／lighting／HUD／systems、world内のprops／trees／roofs／traffic／crowd等の平均・最大値と、街区退去・採用・再構築・GPU転送量を追加しました。
+
+ソフトウェア再現は、同じ建物周辺の450フレームの実タッチスイング操作で追加のworker復元 **61→0件**、キャッシュ退去0件へ。CPUのみの中央値 **20.0→12.2 ms**、平均 **21.84→14.14 ms**、p95 **40.5→28.4 ms**。**これはA14のFPSではなく、実機での30fps達成は未認定です。** 都市を横断する操作は別途実機で検証する必要があります。キャッシュの再現結果、実機の原ログ、分割転送のピクセル同一性は `deployment/working-set.json`／`a14-device-report.json` へ保存しました。
+
+この更新では解像度・テクスチャ・都市／衝突の形状・人数・近距離の影を追加で下げていません。更新版でも重い場合はCOPY REPORT v2の処理内訳で判断します。
+
 ## 2026-10-03: 実機での低FPS報告を受けた追加対策
 
 前版は実機でまだ大きくカクつくと報告されています。前版のCPU計測改善を、A14での30fps達成とみなすことはできません。今回は**内部解像度に必要な調整を追加**し、街の形状・テクスチャ・NPC密度・既存の動作周期・近距離の影を維持しました。
@@ -66,7 +83,7 @@
 
 FPSは実ゲームのフレーム提出間隔で、GPUの実際のディスプレイスワップを認定する値ではありません。CPUは更新処理、submitはJSからGLを呼ぶ時間でGPU時間とは別です。GPU時間は非同期タイマークエリを低頻度サンプルし、未対応は**N/A**（0 msではない）。Neural Engineを使用する実装ではありません。
 
-Node **53件**／ブラウザ **16件**成功。ワーカーのdetail/facade/roof出力のbyte-exact比較、Data URIオリジンからの初期化、GPU骨キャッシュと影の画素比較、context reset、キャンセル・フォールバック・実フレーム計測・遅いfps適応を検証。公開CDNの全ゲーム検証状態は `deployment/build-info.json`／`live-verification.json`、追加対策の記録は `deployment/frame-budget.json`。**A14実機の30fpsはまだ未認定です。** 更新版でプレイし、重い場合はFPS表示とCOPY REPORTを使って実機データを確認する必要があります。
+前対策時点: Node **53件**／ブラウザ **16件**成功。ワーカーのdetail/facade/roof出力のbyte-exact比較、Data URIオリジンからの初期化、GPU骨キャッシュと影の画素比較、context reset、キャンセル・フォールバック・実フレーム計測・遅いfps適応を検証。公開CDNの全ゲーム検証状態は `deployment/build-info.json`／`live-verification.json`、追加対策の記録は `deployment/frame-budget.json`。**A14実機の30fpsはまだ未認定です。** 更新版でプレイし、重い場合はFPS表示とCOPY REPORTを使って実機データを確認する必要があります。
 
 ## 前版: 画質を維持する実行時最適化
 
@@ -113,7 +130,7 @@ npm run archive:cdn         # 最後のCDNビルドをZIPに保存
 
 ## 公開と起動
 
-**2026-10-03、実機の低FPS報告を受けた追加対策版を公開・実CDN検証済み。** 配信コミットは `deployment/release.json`、公開・実CDN検証状態は `deployment/build-info.json` と `deployment/live-verification.json` に記録します。起動HTMLは **711 bytes**、Data URI は **984 bytes**（末尾改行を除く）。以前のURIではなく更新後の40桁SHAに固定したURIを使用してください。配信コミット: `6ed0d3939db019e2d7432371d9aee83eafe3d97d`。[実CDN検証成功](https://github.com/Xavier-Monji/spiderbench/actions/runs/37095327752)。公開・実CDN検証の成功後に `published:true` へ変更しました。
+**2026-10-03、実機CPUログに基づくキャッシュ／VBO転送／遠方更新対策版を更新。** 配信コミットは `deployment/release.json`、公開・実CDN検証状態は `deployment/build-info.json` と `deployment/live-verification.json` へ記録。起動HTML **711 bytes**、Data URI **984 bytes**（末尾改行を除く）。以前のURIではなく更新後の40桁SHAに固定したURIを使用してください。公開・実CDN検証が成功するまでは `published:false` です。
 
 `deployment/launcher.data-uri.txt` の**1行全体**をブラウザのアドレス欄へ貼り付けて開きます。素材を読み込み、街を生成した後、そのままタッチ操作でプレイできます。別途サーバーを用意したり `dist/` を配置したりする必要はありません。`launcher.html` を開いても同じ起動処理になります。初回ダウンロード／生成には待ち時間があり、オフラインでは動きません。
 
@@ -150,13 +167,14 @@ npm run build:cdn
 npm run test:cdn            # ローカルdistでCDNを模擬した全ゲーム統合テスト
 CDN_LIVE=1 npm run test:cdn  # 公開済みjsDelivrのみから実ゲームを読み込むライブ検証
 # 別のターミナルでnpm run dev起動中に:
+npm run profile:swing       # 実タッチスイングでCPU／キャッシュ再構築を計測（GPU時間を除外）
 npm run profile:runtime     # CPU・MAP・ピクセル・描画負荷（A14 FPSではない）
 # 更新前相当とのA/B: PROFILE_URL="http://127.0.0.1:5173/?q=mobile&noruntimecache" npm run profile:runtime
 npm run profile:startup     # Chromiumの起動段階別メモリ（artifacts/startup-memory.json）
 PROFILE_HEAP_MB=384 npm run profile:startup # V8 old-space制限の追加テスト（RAM総量の制限ではありません）
 ```
 
-- `npm test` **53件**、`test:browser` **16件**、全ゲーム `test:cdn` の起動／操作検証が成功。実CDNの結果・CIリンクは `deployment/live-verification.json` を参照。ストリーミングBGMの正常なバッファ／Range読込中断は別記し、4音源のデコード・再生状態にエラーがないことを検証。
+- `npm test` **58件**、`test:browser` **17件**、全ゲーム `test:cdn` の起動／操作検証が成功。実CDNの結果・CIリンクは `deployment/live-verification.json` を参照。ストリーミングBGMの正常なバッファ／Range読込中断は別記し、4音源のデコード・再生状態にエラーがないことを検証。
 - Chromium153 + SwiftShader、1180×820 / DPR2 のタッチ環境で検証。**UA を Safari にしていても Safari エンジンの検証ではありません。**
 - デフォルトのData URI統合テストはCDN応答をローカル `dist/` で模擬します。`CDN_LIVE=1` は応答を差し替えず、実際のCDNからHTML／モジュール／画像／モデルを取得します。JSONレポートの `mode` で両者を区別します。
 - 本番のネイティブ画素予算は967×672 ≤65万画素で確認。ソフトウェアGPUでの全都市画像キャプチャは `SMOKE_SCALE=0.35` に下げます（`SMOKE_SCALE=0.85 npm run test:cdn` で既定解像度のキャプチャ）。これは本番のスケール下限設定を変えません。

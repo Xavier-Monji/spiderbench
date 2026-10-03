@@ -13,6 +13,7 @@
 //   centers[i] = [cx, cz] of tile i;  b.meshes: add them to the scene;  b.setVisible(i, bool);  b.setShadow(i, bool)
 //   (geoms[] entries are consumed: set to null once merged)
 import * as THREE from 'three';
+import { getStreamUploads } from '../render/stream-uploads.js';
 
 // A/B switches: ?perf2off disables every round-2 change; ?nobatch / ?nowarm / ?noproxy / ?nowedge / ?nocrowdopt / ?noucache one each
 const Q = typeof location !== 'undefined' ? new URLSearchParams(location.search) : new URLSearchParams();
@@ -33,6 +34,7 @@ function mk(g, material, name, o) {
 
 export function batchTiles(geoms, material, name, o = {}, centers = []) {
   const n = geoms.length;
+  const uploader = o.renderer && !perf2Off('nostreamchunks') ? getStreamUploads(o.renderer) : null;
   const tile = new Array(n).fill(null); // i -> { m, grp, vis, sh }
   const groups = [];
   const meshes = [];
@@ -111,6 +113,7 @@ export function batchTiles(geoms, material, name, o = {}, centers = []) {
     warm(i) {
       const t = tile[i]; if (!t || NOWARM) return false;
       const g = t.m.geometry;
+      if (uploader && g.userData.streaming) return uploader.warm(g);
       if (g.userData.streaming && !g.userData.streaming.ready) { t.wq = null; return false; }
       if (g.userData.streaming && t.wver !== g.userData.streaming.version) { t.wq = null; t.wver = g.userData.streaming.version; }
       if (!t.wq) t.wq = [...Object.keys(g.attributes), g.index ? '#index' : null].filter(Boolean);

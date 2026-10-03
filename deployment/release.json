@@ -1,9 +1,9 @@
 {
   "repository": "Xavier-Monji/spiderbench",
-  "commit": "6ed0d3939db019e2d7432371d9aee83eafe3d97d",
-  "tree": "9af25729e27a85b2c3b4c44d6c887d2cbe5575bd",
+  "commit": "821a9ebc7bc465fa93d2e89cd5844b0e5162c65c",
+  "tree": "cdd099e642fa0b5ac8ed174f3efd1d69f1f76fe8",
   "branch": "arena/01a0fb2b-spiderbench",
   "files": 111,
-  "bytes": 104105144,
+  "bytes": 104117215,
   "largestFileBytes": 10426684
 }

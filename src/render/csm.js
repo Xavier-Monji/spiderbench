@@ -245,7 +245,7 @@ export class CSM {
       // meshes merged over several distant regions (far shores on both rivers, park + avenue strips): one AABB would
       // cover the whole map, so split them into per-256 m-cell boxes of their vertices (computed once, static meshes)
       let boxes = [box];
-      if (!o.isInstancedMesh && (box.max.x - box.min.x > 512 || box.max.z - box.min.z > 512)) {
+      if (!o.isInstancedMesh && !g.attributes.position.isGLBufferAttribute && (box.max.x - box.min.x > 512 || box.max.z - box.min.z > 512)) {
         const c = this._cellBoxes ??= new WeakMap();
         let e = c.get(o);
         if (!e || e.g !== g || e.n !== g.attributes.position.count) {

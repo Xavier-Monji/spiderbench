@@ -1,0 +1,21 @@
+<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1"><script type="module">
+import * as THREE from 'three';import {compactGeometry} from '/src/render/geometry-budget.js';import {getStreamUploads} from '/src/render/stream-uploads.js';
+const renderer=new THREE.WebGLRenderer({antialias:false});renderer.setSize(320,240);const gl=renderer.getContext();
+const scene=new THREE.Scene();scene.background=new THREE.Color('#14253a');scene.add(new THREE.HemisphereLight(0xffffff,0x263044,2));const sun=new THREE.DirectionalLight(0xffffff,2);sun.position.set(3,6,4);scene.add(sun);
+const camera=new THREE.PerspectiveCamera(50,4/3,.1,100);camera.position.set(3,2,4);camera.lookAt(0,0,0);
+const g=compactGeometry(new THREE.BoxGeometry(2,2,2));g.setAttribute('color',new THREE.Float16BufferAttribute(Array.from({length:g.attributes.position.count*3},(_,i)=>i%3===0?.8:.2),3));
+const mesh=new THREE.Mesh(g,new THREE.MeshStandardMaterial({vertexColors:true,roughness:.6}));scene.add(mesh);
+const pixels=()=>{renderer.render(scene,camera);const a=new Uint8Array(320*240*4);gl.readPixels(0,0,320,240,gl.RGBA,gl.UNSIGNED_BYTE,a);return a};
+const before=pixels(), baselineError=gl.getError(), uploadErrors=[];g.userData.streaming={ready:true,gpuReady:false,recipe:{role:'facade'}};
+const uploader=getStreamUploads(renderer,{maxBytesPerFrame:128});let frames=0;
+while(!g.userData.streaming.gpuReady&&frames<200){uploader.beginFrame();uploader.warm(g);const err=gl.getError();if(err)uploadErrors.push({frame:frames,error:err});frames++;}
+const after=pixels(), renderError=gl.getError();let different=0;for(let i=0;i<before.length;i++)if(before[i]!==after[i])different++;
+// A new geometry id has no old index/VAO to accidentally hide an upload/binding error.
+const fresh=compactGeometry(new THREE.BoxGeometry(2,2,2));fresh.setAttribute('color',new THREE.Float16BufferAttribute(Array.from({length:fresh.attributes.position.count*3},(_,i)=>i%3===0?.8:.2),3));
+fresh.userData.streaming={ready:true,gpuReady:false,recipe:{role:'facade'}};
+for(let i=0;!fresh.userData.streaming.gpuReady&&i<200;i++){uploader.beginFrame();uploader.warm(fresh);}
+mesh.geometry=fresh;const freshPixels=pixels(),freshError=gl.getError();let freshDifference=0;for(let i=0;i<before.length;i++)if(before[i]!==freshPixels[i])freshDifference++;
+const buffers=Object.values(g.attributes).map(a=>a.buffer);buffers.push(g.index.buffer);
+g.dispose();const released=buffers.every(b=>!gl.isBuffer(b));
+window.uploadFixture={freshDifference,freshError,baselineError,uploadErrors,renderError,different,frames,released,stats:uploader.stats,error:gl.getError()};
+</script>

@@ -1,0 +1,277 @@
+{
+  "target": "Apple A14 / 4 GiB",
+  "hardwareFpsVerified": false,
+  "updatedAt": "2026-10-03T06:54:45.763Z",
+  "hardwareBaseline": "deployment/a14-device-report.json",
+  "diagnosis": {
+    "cpuMs": 119.85714285712622,
+    "submitMs": 50,
+    "submitIsNotMeasuredGpuTime": true,
+    "resolutionAlreadyAtFloor": true,
+    "reproduction": "A tethered swing moving only ~15 m repeatedly around one building still rebuilt 61 additional worker geometries. Cache admission previously evicted valuable residents for less useful farther candidates."
+  },
+  "fixes": {
+    "workingSet": "Distance/role/visibility-ranked admission with hysteresis; do not evict better residents for farther completed tiles. 10 Hz scheduling, 64 MiB cap retained.",
+    "upload": "Preallocated native VBOs, <=256 KiB/frame slices shared across facade/roof/detail; index buffer class tagged in private VAO; atomically swap GL attributes only on completion; bounded allocation and context replay.",
+    "crowd": "Near player/camera, reactions and danger remain immediate. Distant AI 10/5/2.5 Hz with render-rate position/yaw/head interpolation, offscreen work reduction and 15 Hz personal-space broadphase. Density/models/clips retained.",
+    "traffic": "Near camera/player full-rate; mid-distance lane updates 15 Hz and interpolate render positions. Authoritative dynamic collision positions remain current.",
+    "transforms": "Cache unchanged city/root matrices while keeping later position/quaternion/scale edits functional.",
+    "telemetry": "v2 parts mean/max for player/world/lighting/HUD/systems and world subgroups, plus cache/admission and GPU upload counters.",
+    "unchanged": "No further resolution, texture, city/collision, NPC density or near-shadow reductions in this update."
+  },
+  "softwareComparison": {
+    "engine": "153.0.8010.0",
+    "cpuOnly": true,
+    "caveat": "Sandbox Chromium CPU-only traversal samples, not iPad/Safari FPS or GPU cost.",
+    "before": {
+      "moving": {
+        "samples": 450,
+        "mean": 21.843777777777934,
+        "p50": 20,
+        "p95": 40.5,
+        "max": 73.90000000002328
+      },
+      "parts": {
+        "player": {
+          "samples": 450,
+          "mean": 2.878666666668012,
+          "p50": 1.7000000000116415,
+          "p95": 8.299999999988358,
+          "max": 29.599999999976717
+        },
+        "world": {
+          "samples": 450,
+          "mean": 17.461111111110593,
+          "p50": 15.799999999988358,
+          "p95": 33.5,
+          "max": 52.300000000046566
+        },
+        "lighting": {
+          "samples": 450,
+          "mean": 0.12644444444359074,
+          "p50": 0,
+          "p95": 0.1000000000349246,
+          "max": 15.299999999988358
+        },
+        "hud": {
+          "samples": 450,
+          "mean": 0.5853333333341612,
+          "p50": 0.29999999998835847,
+          "p95": 2.1000000000349246,
+          "max": 12.399999999965075
+        }
+      },
+      "worldParts": {
+        "ground": 0.011308991844124932,
+        "groundMax": 1.2999999999883585,
+        "highways": 0.4387826606937235,
+        "highwaysMax": 9.199999999953434,
+        "hero": 0.000813691363628131,
+        "heroMax": 0.1000000000349246,
+        "props": 0.6836585668447986,
+        "propsMax": 18.20000000001164,
+        "trees": 2.497283710943724,
+        "treesMax": 50.09999999997672,
+        "traffic": 5.103295784177635,
+        "trafficMax": 113.60000000003492,
+        "peds": 11.33399203061937,
+        "pedsMax": 96.29999999998836
+      },
+      "stationaryStream": {
+        "tiles": 926,
+        "ready": 16,
+        "recipeBytes": 92312493,
+        "residentBytes": 63786919,
+        "peakResidentBytes": 66664427,
+        "maxResidentBytes": 67108864,
+        "worker": {
+          "state": "busy",
+          "started": 13,
+          "completed": 12,
+          "cancelled": 0,
+          "failed": 0,
+          "pending": 1,
+          "error": null
+        }
+      },
+      "endStream": {
+        "tiles": 926,
+        "ready": 16,
+        "recipeBytes": 92312493,
+        "residentBytes": 66664427,
+        "peakResidentBytes": 66960071,
+        "maxResidentBytes": 67108864,
+        "worker": {
+          "state": "busy",
+          "started": 74,
+          "completed": 73,
+          "cancelled": 0,
+          "failed": 0,
+          "pending": 1,
+          "error": null
+        }
+      }
+    },
+    "after": {
+      "moving": {
+        "samples": 450,
+        "mean": 14.139555555558246,
+        "p50": 12.199999999720603,
+        "p95": 28.399999999906868,
+        "max": 87.89999999990687
+      },
+      "parts": {
+        "player": {
+          "samples": 450,
+          "mean": 1.7062222222197387,
+          "p50": 1.1000000000931323,
+          "p95": 4.599999999627471,
+          "max": 25.40000000037253
+        },
+        "world": {
+          "samples": 450,
+          "mean": 11.460444444458311,
+          "p50": 9.899999999906868,
+          "p95": 23.100000000093132,
+          "max": 58.09999999962747
+        },
+        "lighting": {
+          "samples": 450,
+          "mean": 0.08999999999793039,
+          "p50": 0,
+          "p95": 0.10000000009313226,
+          "max": 9.200000000186265
+        },
+        "hud": {
+          "samples": 450,
+          "mean": 0.43511111112001044,
+          "p50": 0.2999999998137355,
+          "p95": 1.3999999999068677,
+          "max": 8.200000000186265
+        }
+      },
+      "worldParts": {
+        "ground": 0.022311791298174535,
+        "groundMax": 1,
+        "highways": 0.1999131801494112,
+        "highwaysMax": 7.7999999998137355,
+        "hero": 0.000726760611098485,
+        "heroMax": 0.10000000009313226,
+        "props": 0.4033297647660559,
+        "propsMax": 27.100000000093132,
+        "trees": 0.673364586557264,
+        "treesMax": 110.29999999981374,
+        "traffic": 2.672209001285272,
+        "trafficMax": 157.5,
+        "peds": 5.5619387737342665,
+        "pedsMax": 123.89999999990687
+      },
+      "stationaryStream": {
+        "tiles": 926,
+        "ready": 16,
+        "recipeBytes": 92312493,
+        "residentBytes": 60473892,
+        "peakResidentBytes": 60473892,
+        "maxResidentBytes": 67108864,
+        "worker": {
+          "state": "ready",
+          "started": 7,
+          "completed": 7,
+          "cancelled": 0,
+          "failed": 0,
+          "pending": 0,
+          "error": null
+        },
+        "cache": {
+          "builds": 18,
+          "admissions": 16,
+          "evictions": 0,
+          "budgetRejects": 2,
+          "repeatBuilds": 0
+        }
+      },
+      "endStream": {
+        "tiles": 926,
+        "ready": 16,
+        "recipeBytes": 92312493,
+        "residentBytes": 60473892,
+        "peakResidentBytes": 60473892,
+        "maxResidentBytes": 67108864,
+        "worker": {
+          "state": "ready",
+          "started": 7,
+          "completed": 7,
+          "cancelled": 0,
+          "failed": 0,
+          "pending": 0,
+          "error": null
+        },
+        "cache": {
+          "builds": 18,
+          "admissions": 16,
+          "evictions": 0,
+          "budgetRejects": 2,
+          "repeatBuilds": 0
+        }
+      }
+    },
+    "additionalWorkerBuildsDuring450FrameTetheredSwing": {
+      "before": 61,
+      "after": 0
+    }
+  },
+  "tests": {
+    "node": 58,
+    "browser": 17,
+    "nativeGpuAttributesPixelExact": true,
+    "uploadEvictionRelease": true,
+    "playerTraversalRetained": true
+  },
+  "mockedCdn": {
+    "requests": 82,
+    "heapAfterStartupGc": 752504375,
+    "uploads": {
+      "bytes": 13789196,
+      "completed": 2,
+      "cancelled": 2,
+      "releases": 2,
+      "frameBytes": 90680,
+      "frameAllocations": 1,
+      "maxFrameBytes": 229376,
+      "maxBytesPerFrame": 262144
+    },
+    "worker": {
+      "state": "ready",
+      "started": 13,
+      "completed": 13,
+      "cancelled": 0,
+      "failed": 0,
+      "pending": 0,
+      "error": null
+    },
+    "cache": {
+      "builds": 12,
+      "admissions": 11,
+      "evictions": 6,
+      "budgetRejects": 0,
+      "repeatBuilds": 5
+    },
+    "culling": {
+      "before": {
+        "calls": 441,
+        "triangles": 4984469
+      },
+      "after": {
+        "calls": 432,
+        "triangles": 4921601
+      },
+      "different": 0,
+      "components": 738912
+    },
+    "errors": [],
+    "failed": []
+  },
+  "publication": {
+    "status": "pending real-CDN verification"
+  }
+}

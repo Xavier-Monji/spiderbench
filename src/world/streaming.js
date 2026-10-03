@@ -4,6 +4,7 @@ import * as THREE from 'three';
 import { deflateSync, strToU8 } from 'fflate';
 import { keyOf, expandPacket } from './recipe-codec.js';
 import { unpackGeometry } from './geometry-transfer.js';
+import { planAdmission, rankedResidents } from './cache-admission.js';
 import { GrowBuffer } from './buffer.js';
 import { compactGeometry, compactGeometrySteps } from '../render/geometry-budget.js';
 
@@ -119,12 +120,17 @@ const distance = (p, r) => Math.hypot(Math.max(0, Math.abs(p.x - r.cx) - 128), M
 const geometryBytes = g => Object.values(g.attributes).reduce((n, a) => n + a.array.byteLength, g.index?.array.byteLength || 0);
 export function createGeometryStreamer(scene, { budgetMs = 3, maxResidentBytes = 64 * 1048576 } = {}) {
   const entries = [];
-  scene.traverse(m => { const g = m.geometry, s = g?.userData.streaming; if (s) entries.push({ g, s, bytes: 0, d: Infinity }); });
+  scene.traverse(m => { const g = m.geometry, s = g?.userData.streaming; if (s) entries.push({ g, s, bytes: 0, d: Infinity, rank: Infinity, order: entries.length, loads: 0 }); });
   let job = null, residentBytes = 0, peakResidentBytes = 0, worker = null;
   const legacy = new URLSearchParams(globalThis.location?.search ?? '').has('noruntimecache');
+  const admission = !legacy && !new URLSearchParams(globalThis.location?.search ?? '').has('nostreamadmission');
+  const counters = { builds: 0, admissions: 0, evictions: 0, budgetRejects: 0, repeatBuilds: 0 };
+  let lastScan = -Infinity, lastX = Infinity, lastZ = Infinity, residents = [];
+  const frustum = new THREE.Frustum(), projection = new THREE.Matrix4();
   const priority = { facade: 0, roof: 5, detail: 30, roofAO: 50, roofStreaks: 60 };
   function evict(entry) {
     if (!entry.s.ready) return;
+    counters.evictions++;
     entry.g.dispose(); entry.g.attributes = {};
     entry.g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(0), 3));
     entry.g.setIndex(new THREE.BufferAttribute(new Uint16Array(0), 1)); entry.g.clearGroups();
@@ -135,14 +141,25 @@ export function createGeometryStreamer(scene, { budgetMs = 3, maxResidentBytes =
     if (g) yield* compactGeometrySteps(g);
     return g;
   }
-  function update(p, budget = budgetMs) {
+  function update(p, budget = budgetMs, camera = null) {
     const now = performance.now();
-    for (const e of entries) {
-      e.d = distance(p, e.s.recipe);
-      if (e.d > e.s.recipe.range + 256) { evict(e); if (job?.entry === e) { if (job.workerId) worker?.cancel(job.workerId); job = null; } }
+    const scan = !admission || now - lastScan >= 100 || (p.x - lastX) ** 2 + (p.z - lastZ) ** 2 >= 24 ** 2;
+    if (scan) {
+      lastScan = now; lastX = p.x; lastZ = p.z;
+      if (camera) { camera.updateMatrixWorld(); projection.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
+        frustum.setFromProjectionMatrix(projection, camera.coordinateSystem, camera.reversedDepth); }
+      for (const e of entries) {
+        e.d = distance(p, e.s.recipe);
+        const visible = !camera || e.d < 140 || !e.g.boundingSphere || frustum.intersectsSphere(e.g.boundingSphere);
+        e.rank = e.d + (priority[e.s.recipe.role] ?? 60) + (visible ? 0 : 384);
+        if (e.rank < (e.blockedRank ?? -Infinity) - 16) { e.blockedUntil = 0; e.blockedRank = -Infinity; }
+        if (e.d > e.s.recipe.range + 256) { evict(e); if (job?.entry === e) { if (job.workerId) worker?.cancel(job.workerId); job = null; } }
+      }
+      residents = rankedResidents(entries);
     }
     while (performance.now() - now < budget) {
       if (!job) {
+        if (admission && !scan) break;
         // Linear stable minimum: identical distance/role priority and tie order, without a filter + sort
         // allocation over ~926 recipes for every job. Keep the developer A/B path for runtime profiling.
         let next = null, score = Infinity;
@@ -150,10 +167,16 @@ export function createGeometryStreamer(scene, { budgetMs = 3, maxResidentBytes =
           .sort((a, b) => (a.d + (priority[a.s.recipe.role] ?? 60)) - (b.d + (priority[b.s.recipe.role] ?? 60)))[0];
         else for (const e of entries) {
           if (e.s.ready || e.d >= e.s.recipe.range + 96 || (e.blockedUntil ?? 0) >= now) continue;
-          const value = e.d + (priority[e.s.recipe.role] ?? 60);
+          const value = admission ? e.rank : e.d + (priority[e.s.recipe.role] ?? 60);
+          if (admission) {
+            if (e.bytes && !planAdmission(e, residents, residentBytes, maxResidentBytes, e.bytes)) continue;
+            if (!e.bytes && maxResidentBytes - residentBytes < maxResidentBytes * .1
+              && !residents.some(r => r.rank > e.rank + 16)) continue;
+          }
           if (value < score) { score = value; next = e; }
         }
         if (!next) break;
+        counters.builds++; if (next.loads) counters.repeatBuilds++;
         const packet = !legacy && worker ? next.s.recipe.packet?.() : null;
         if (packet && next.s.recipe.bytes <= 8 * 1048576 && worker.available) {
           const task = worker.submit(packet, next.s.options);
@@ -176,8 +199,13 @@ export function createGeometryStreamer(scene, { budgetMs = 3, maxResidentBytes =
         if (legacy) compactGeometry(g);
         e.bytes = geometryBytes(g);
         if (e.bytes > maxResidentBytes) { e.blockedUntil = now + 60000; continue; }
-        // Do not create/sort an eviction list unless the residency cap actually needs eviction.
-        while (residentBytes + e.bytes > maxResidentBytes) {
+        if (admission) {
+          const victims = planAdmission(e, residents, residentBytes, maxResidentBytes, e.bytes);
+          if (!victims) { counters.budgetRejects++; e.blockedUntil = now + 1000; e.blockedRank = e.rank; g.dispose(); continue; }
+          for (const cold of victims) { evict(cold); cold.blockedUntil = now + 1000; cold.blockedRank = cold.rank; }
+        }
+        // Developer reference path retains the old unconditional farthest-first eviction.
+        while (!admission && residentBytes + e.bytes > maxResidentBytes) {
           let cold = null;
           for (const c of entries) if (c.s.ready && c !== e && (!cold || c.d > cold.d)) cold = c;
           if (!cold) break;
@@ -186,12 +214,14 @@ export function createGeometryStreamer(scene, { budgetMs = 3, maxResidentBytes =
         e.g.dispose(); e.g.attributes = g.attributes; e.g.index = g.index;
         e.g.boundingBox = g.boundingBox; e.g.boundingSphere = g.boundingSphere; e.g.groups = g.groups;
         e.s.ready = true; e.s.gpuReady = false; e.s.version = (e.s.version ?? 0) + 1; residentBytes += e.bytes; peakResidentBytes = Math.max(peakResidentBytes, residentBytes);
+        e.loads++; counters.admissions++; if (admission) residents = rankedResidents(entries);
       }
     }
   }
   return {
     update,
     setWorker(client) { worker = client; },
+    resetGpu() { for (const e of entries) evict(e); if (job?.workerId) worker?.cancel(job.workerId); job = null; lastScan = -Infinity; residents = []; },
     async prime(p, { maxBytes = Math.min(maxResidentBytes, 24 * 1048576), maxTiles = 12, radius = 160 } = {}) {
       // Only the spawn neighbourhood is expanded before play. Do not fill the entire runtime budget at boot,
       // and never mark all buffers GPU-ready: batchTiles uploads one attribute at a time behind the LOD fallback.
@@ -203,6 +233,6 @@ export function createGeometryStreamer(scene, { budgetMs = 3, maxResidentBytes =
       }
     },
     get stats() { return { tiles: entries.length, ready: entries.filter(e => e.s.ready).length,
-      recipeBytes: entries.reduce((n, e) => n + e.s.recipe.bytes, 0), residentBytes, peakResidentBytes, maxResidentBytes, worker: worker?.stats ?? null }; },
+      recipeBytes: entries.reduce((n, e) => n + e.s.recipe.bytes, 0), residentBytes, peakResidentBytes, maxResidentBytes, worker: worker?.stats ?? null, cache: { ...counters } }; },
   };
 }

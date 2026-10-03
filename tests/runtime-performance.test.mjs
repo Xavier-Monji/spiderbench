@@ -90,7 +90,7 @@ test('cached icon placement is byte-identical to original relaxation, including 
   }
   assert.deepEqual(projectMapIcons(items,it=>[it.x,it.y],size),reference);
 });
-test('linear streaming scheduler preserves role priority, ties, cold-tile eviction and byte-exact return', () => {
+test('streaming cache keeps nearest role-prioritized residents instead of cycling farther tiles', () => {
   const order=[],scene=new THREE.Scene();
   for(const [id,role,cx]of[['detail','detail',0],['roof','roof',0],['facade1','facade',0],['facade2','facade',0]]) {
     const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute([],3));
@@ -98,7 +98,7 @@ test('linear streaming scheduler preserves role priority, ties, cold-tile evicti
     scene.add(new THREE.Mesh(g,new THREE.MeshBasicMaterial()));
   }
   const stream=createGeometryStreamer(scene,{maxResidentBytes:1400});stream.update(new THREE.Vector3(),100);
-  assert.deepEqual(order,['facade1','facade2','roof','detail']);assert.ok(stream.stats.residentBytes<=1400);
+  assert.deepEqual(order,['facade1','facade2']);assert.ok(stream.stats.residentBytes<=1400);
   stream.update(new THREE.Vector3(5000,0,5000),0);assert.equal(stream.stats.residentBytes,0);
 });
 

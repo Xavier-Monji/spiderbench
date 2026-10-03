@@ -119,6 +119,16 @@ try {
   assert.equal(stats.eviction.far.residentBytes, 0); assert.equal(stats.eviction.far.ready, 0);
   assert.ok(stats.eviction.returned.residentBytes > 0);
   assert.ok(stats.eviction.returned.residentBytes <= stats.eviction.returned.maxResidentBytes);
+  // Finish actual chunked VBO uploads before the next real scene render. CPU-only manual frames still
+  // submit bounded COPY_WRITE slices; this catches broken native index/half/normalized attributes.
+  stats.uploads = await page.evaluate(async () => {
+    for (let i = 0; i < 240 && __ctx.diagnostics.report().uploads.completed < 2; i++) {
+      __ctx.stepFrame(1/30); await new Promise(r => setTimeout(r, 0));
+    }
+    return __ctx.diagnostics.report().uploads;
+  });
+  assert.ok(stats.uploads.completed >= 2, 'Streamed VBO uploads never completed');
+  assert.ok(stats.uploads.maxFrameBytes <= 256*1024, 'Stream upload frame byte budget exceeded');
   stats.worker = await page.evaluate(() => __ctx.geometryWorker?.stats);
   assert.ok(stats.worker && stats.worker.completed > 0 && stats.worker.failed === 0, 'Opaque-origin geometry worker did not build a tile');
   stats.poseAtlas = await page.evaluate(() => __ctx.crowdPoses?.stats);

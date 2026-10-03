@@ -13,6 +13,7 @@ import { assetUrl } from '../../platform/assets.js';
 //    makes them cower/flee.
 import * as THREE from 'three';
 import { GLSL_BONE_TRANSFORMS } from './bone-shader.js';
+import { crowdInterval, cadenceStep, poseAlpha, lerpAngle } from './cadence.js';
 import { getQuality } from '../../render/quality.js';
 import { G, mulberry32, streetsAt, inPark, shoreX, VMAP, MAPS, vmapAt } from '../layout.js'; // (layout2 r3) VMAP, vmapAt: Village walkers
 import { PARK_MEADOWS, meadowDist } from '../trees.js';
@@ -658,7 +659,7 @@ function createBlobs(scene, animTex, meta) {
 }
 
 // ------------------------------------------------------------------ crowd
-export async function createCrowd({ scene, blocks, parkPaths, props, roads, phase, runtimeCache = !perf2Off('noruntimecache') }) {
+export async function createCrowd({ scene, blocks, parkPaths, props, roads, phase, runtimeCache = !perf2Off('noruntimecache'), budgetSim = MOBILE && !perf2Off('legacycrowdrate') }) {
   const [meta, bin, pedTex, bakeTex] = await Promise.all([
     fetch(assetUrl('/assets/city/npc/people.json')).then(r => r.json()),
     fetch(assetUrl('/assets/city/npc/people.bin')).then(r => r.arrayBuffer()),
@@ -1341,7 +1342,7 @@ export async function createCrowd({ scene, blocks, parkPaths, props, roads, phas
       const d2 = dx * dx + dz * dz;
       if (!b.agents && d2 < RP * RP) { if (budget-- > 0) populate(b); else backlog = true; }
       else if (b.agents && d2 > (RP + 40) ** 2) {
-        for (const a of agents) if (a.block === b && !a.static) a.dead = true;
+        for (const a of b.agents) if (a.block === b && !a.static) a.dead = true;
         b.agents = null; b.near = false;
       }
       if (b.agents && !b.near && d2 < RNEAR[0] * RNEAR[0]) { if (budget-- > 0) populateNear(b); else backlog = true; }
@@ -1709,7 +1710,8 @@ export async function createCrowd({ scene, blocks, parkPaths, props, roads, phas
     if (a.park || a.elev || a.mode === 'path' || a.mode === 'sit' || a.mode === 'prom') return a.y ?? G.CURB_H; // (street r7) a.elev
     return agentOnRoad(a) ? 0 : G.CURB_H;
   };
-  let frame = 0;
+  let frame = 0, separationDebt = 0;
+  const cadence = { steps: 0, fullRateSteps: 0, interpolated: 0 };
   const api = {
     agents, statics, pools: allPools,
     animation: { texture: animTex, bones: meta.bones, nb: meta.nb, uniforms: uni },
@@ -1734,7 +1736,7 @@ export async function createCrowd({ scene, blocks, parkPaths, props, roads, phas
     },
     zones,
     update(dt, camera) {
-      time += dt; frame++;
+      time += dt; frame++; cadence.steps = cadence.fullRateSteps = cadence.interpolated = 0;
       uni.uTime.value = time;
       const cp = camera.position;
       const PF = api.prof, q0 = PF ? performance.now() : 0;
@@ -1744,21 +1746,37 @@ export async function createCrowd({ scene, blocks, parkPaths, props, roads, phas
       alarms = alarms.filter(al => time - al.t < 0.5);
       for (const xw of roads.crosswalks.values()) xw.peds = 0;
       camera.updateMatrixWorld();
-      pv.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse); frustum.setFromProjectionMatrix(pv);
+      pv.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse); frustum.setFromProjectionMatrix(pv, camera.coordinateSystem, camera.reversedDepth);
       for (const p of allPools) p.begin();
       dogs?.begin(); blobs?.begin(); if (blobs) blobs.mat.uniforms.uTime.value = time;
       // Same radius checks inside the old loop; conservative cells + a whole-cell margin also contain
       // everyone touched by separation. Paths/prom walkers remain candidates even on the other river.
       const staticCandidates = staticIndex?.query(cp.x, cp.z, LOD_D[2] + 20 + 64) ?? statics;
       sLists[1] = staticCandidates;
-      separate(cp, dt); // (peds r2)
+      if (budgetSim) { separationDebt += dt; if (separationDebt >= 1/15) { separate(cp, separationDebt); separationDebt = 0; } }
+      else separate(cp, dt); // (peds r2)
       const handle = (a) => {
         const dxc = a.x - cp.x, dzc = a.z - cp.z, dc2 = dxc * dxc + dzc * dzc;
         // time-sliced simulation: < 110 m every frame, 110-300 m (drawn) every 4th, beyond (not drawn) every 12th frame
         // (perf r2) 45-110 m every 2nd frame (was every frame): ~1 px steps at 30 Hz there; reactions / looks stay per frame
         const slice = SLICE2 ? (dc2 < 45 * 45 || a.react ? 1 : dc2 < 110 * 110 ? 2 : dc2 < 310 * 310 ? 4 : 12) : dc2 < 110 * 110 ? 1 : dc2 < 310 * 310 ? 4 : 12;
-        const sdt = slice === 1 ? dt : ((frame + a.slot) % slice === 0 ? Math.min(dt * slice, 0.5) : 0);
+        const pd2 = (a.x - player.pos.x) ** 2 + (a.z - player.pos.z) ** 2;
+        let urgent = !!a.react || player.landT > time - .3;
+        if (!urgent && alarms.length) urgent = alarms.some(z => (a.x-z.x)**2+(a.z-z.z)**2 < (z.r+6)**2);
+        if (!urgent && zones.size) for (const z of zones.values()) if ((a.x-z.x)**2+(a.z-z.z)**2 < (z.r+6)**2) { urgent = true; break; }
+        let interval = budgetSim ? crowdInterval(dc2, pd2, urgent) : 0;
+        // Most of the ~3000 streamed agents are not drawn. Do not run 10 Hz AI for a pedestrian behind
+        // the camera while the player swings overhead. The 6 m margin preactivates entrants; danger and
+        // player proximity remain immediate, crosswalk occupancy is still registered every frame.
+        if (budgetSim && interval && pd2 > 60*60) {
+          sph.center.set(a.x, a.y + .9, a.z); sph.radius = 6;
+          if (!frustum.intersectsSphere(sph)) interval = .4;
+        }
+        const sdt = budgetSim ? cadenceStep(a, dt, interval)
+          : slice === 1 ? dt : ((frame + a.slot) % slice === 0 ? Math.min(dt * slice, 0.5) : 0);
+        const oldX = a.x, oldZ = a.z, oldRy = a.ry, oldYaw = a.lookYaw, oldPitch = a.lookPitch;
         if (sdt > 0) {
+          cadence.steps++; if (!interval) cadence.fullRateSteps++;
           const d = toPlayer(a);
           let held = false;
           if (d < 45 || alarms.length || zones.size || a.react || (player.landT > time - 0.3)) held = reactions(a, sdt, d);
@@ -1772,15 +1790,26 @@ export async function createCrowd({ scene, blocks, parkPaths, props, roads, phas
           if (d < 40) { look(a, sdt, d); dodge(a, d, sdt); } else if (dc2 < 60 * 60) look(a, sdt, 99); // (peds r3) glances near the camera
           else if (a.lookYaw || a.lookPitch) { a.lookYaw *= 0.9; a.lookPitch *= 0.9; }
           a._hy = undefined; // (perf r2) moved: re-derive the cached height / on-road flag
+          if (budgetSim && interval) {
+            const m = a._motion ??= {};
+            m.x=oldX;m.z=oldZ;m.ry=oldRy;m.yaw=oldYaw;m.pitch=oldPitch;m.at=time;m.interval=Math.max(interval,sdt);
+          } else if (budgetSim) a._motion = null;
         } else if (a.mode === 'cross' && (a._hy === undefined ? agentOnRoad(a) : a._or)) a.xw.peds++; // (perf r2) cached
         if (dc2 > LOD_D[2] * LOD_D[2]) return;
         if (dc2 > 400) { sph.center.set(a.x, a.y + 0.9, a.z); sph.radius = 1.1; if (!frustum.intersectsSphere(sph)) return; }
         const lod = dc2 < LOD_D[0] * LOD_D[0] ? 0 : dc2 < LOD_D[1] * LOD_D[1] ? 1 : 2;
         if (a._hy === undefined) { a._hy = heightAt(a); a._or = a._hy === 0 && agentOnRoad(a); } // (perf r2) only after a step
         const hy = a._hy;
+        const targetX=a.x,targetZ=a.z,targetRy=a.ry,targetYaw=a.lookYaw,targetPitch=a.lookPitch;
+        if (budgetSim && interval && a._motion) {
+          const m = a._motion, alpha = poseAlpha(time, m.at, m.interval); cadence.interpolated++;
+          a.x = m.x + (targetX-m.x)*alpha; a.z=m.z+(targetZ-m.z)*alpha; a.ry=lerpAngle(m.ry,targetRy,alpha);
+          a.lookYaw=m.yaw+(targetYaw-m.yaw)*alpha; a.lookPitch=m.pitch+(targetPitch-m.pitch)*alpha;
+        }
         pools[a.vi][lod].push(a, a.x, hy, a.z);
         if (blobs && dc2 < BLOB_D * BLOB_D && a.mode !== 'sit') blobs.push(a, hy, Math.sqrt(dc2)); // (peds r2) contact shadow
         if (a.dog && lod < 2) dogs.push(a, hy, lod, time);
+        a.x=targetX;a.z=targetZ;a.ry=targetRy;a.lookYaw=targetYaw;a.lookPitch=targetPitch;
       };
       for (const a of agents) handle(a);
       const q2 = PF ? performance.now() : 0;
@@ -1802,7 +1831,7 @@ export async function createCrowd({ scene, blocks, parkPaths, props, roads, phas
     stats() {
       let drawn = 0; for (const p of allPools) drawn += p.n;
       let park = 0, near = 0; for (const a of agents) { if (a.park) park++; else if (a.tier === 'near') near++; }
-      return { people: agents.length + statics.length, peopleDrawn: drawn, parkPeople: park, nearTier: near };
+      return { cadence: { ...cadence, budgeted: budgetSim }, people: agents.length + statics.length, peopleDrawn: drawn, parkPeople: park, nearTier: near };
     },
     // everyone (streamed + static) within r metres of (x,z) — for critics / tools
     near(x, z, r = 80) {

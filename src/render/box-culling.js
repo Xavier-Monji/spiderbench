@@ -2,6 +2,7 @@
 // A world-space AABB is tighter for these STATIC batches. This applies independently to MAIN AND SHADOW
 // frusta: never hide an off-camera object before the shadow pass (it may cast a visible shadow).
 import * as THREE from 'three';
+import { cacheStaticTransform } from './static-transforms.js';
 const STATIC_NAMES = /^(?:facade(?:Lod)?(?: |$)|detail(?: |$)|roof(?: |$)|roofAO(?: |$)|roofStreaks(?: |$)|coast-|farCity(?:Mass)?$|sidewalks$|asphalt$|markings$|streetGrime$|seawall\+parkwall$|bridgeStone$|bridgeSteel$)/;
 
 export function markBoxCullable(scene) {
@@ -12,7 +13,7 @@ export function markBoxCullable(scene) {
     if (o.isInstancedMesh ? !o.userData.staticBounds : !STATIC_NAMES.test(o.name)) return;
     if (o.isInstancedMesh) o.computeBoundingBox();
     else if (!o.geometry.boundingBox) o.geometry.computeBoundingBox();
-    o.userData.boxFrustum = true;
+    o.userData.boxFrustum = true; cacheStaticTransform(o);
   });
 }
 

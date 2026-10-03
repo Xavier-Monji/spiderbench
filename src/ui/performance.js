@@ -1,4 +1,5 @@
 import './performance.css';
+import { getStreamUploads } from '../render/stream-uploads.js';
 
 export function createPerformancePanel(ctx, { visible = ctx.quality.mobile } = {}) {
   const panel = document.createElement('section'); panel.id = 'performance-panel'; panel.setAttribute('aria-label', 'Performance diagnostics');
@@ -9,10 +10,10 @@ export function createPerformancePanel(ctx, { visible = ctx.quality.mobile } = {
   let timer = 0, shown = !!visible, lastText = '';
   function report() {
     const gl = ctx.renderer.getContext(), size = ctx.pipeline.size;
-    return { format: 'spiderbench-performance-v1', time: new Date().toISOString(), mode: ctx.flow?.mode ?? 'play',
+    return { format: 'spiderbench-performance-v2', time: new Date().toISOString(), mode: ctx.flow?.mode ?? 'play',
       frame: ctx.telemetry.report(), gpu: { available: ctx.pipeline.gpuProfilingSupported?.() ?? false, timings: ctx.pipeline.timings?.() ?? {} },
       render: ctx.pipeline.stats, resolution: { scale: ctx.resolution.scale, ...size, pixels: size.W * size.H },
-      stream: ctx.world.streamer?.stats, poseAtlas: ctx.crowdPoses?.stats ?? null,
+      stream: ctx.world.streamer?.stats, uploads: getStreamUploads(ctx.renderer).stats, life: ctx.world.life?.stats?.(), poseAtlas: ctx.crowdPoses?.stats ?? null,
       device: { userAgent: navigator.userAgent, dpr: devicePixelRatio, renderer: gl.getParameter(gl.RENDERER),
         webglVersion: gl.getParameter(gl.VERSION), cpuCoresReported: navigator.hardwareConcurrency ?? null },
       caveat: 'FPS comes from real-time gameplay frame submission intervals, not a synthetic CPU reciprocal or confirmed display swaps. CPU excludes GL submission; submit is JavaScript API time, not GPU time. GPU unavailable means no timer extension, NOT zero GPU cost.' };

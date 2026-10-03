@@ -142,6 +142,11 @@ void main() {
       fxaa.uniforms.uPx.value.set(1 / W, 1 / H);
       composite.uniforms.uSkyPx.value.set(1 / skyRT.width, 1 / skyRT.height);
     },
+    // Reuse the existing graded RT. No extra full-resolution cache/copy; same final FXAA pixels.
+    present() {
+      renderer.info.reset(); fxaa.render(renderer, null);
+      stats = { calls: renderer.info.render.calls, triangles: renderer.info.render.triangles, cached: true };
+    },
     render() {
       renderer.info.reset();
       renderer.setRenderTarget(sceneRT); renderer.setClearColor(0, 1); renderer.clear(); renderer.render(scene, camera);

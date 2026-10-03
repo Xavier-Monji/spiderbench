@@ -47,6 +47,7 @@ export function createResolutionController(renderer, quality) {
       devicePixelRatio: globalThis.devicePixelRatio || 1, scale: governor.scale, quality });
     renderer.setPixelRatio(pr); renderer.setSize(innerWidth, innerHeight);
     pipeline?.setSize(innerWidth, innerHeight);
+    globalThis.__ctx?.framePolicy?.invalidate();
   }
   resize();
   return {

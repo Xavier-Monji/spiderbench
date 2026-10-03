@@ -9,6 +9,7 @@
 // Caveat for other agents: do NOT add another DirectionalLight with castShadow=true before the CSM lights in
 // scene traversal order. Non-shadow directional lights are fine (they're shaded normally).
 import * as THREE from 'three';
+import { installUniformCache } from './uniform-cache.js';
 
 let _installed = false;
 export const CHAR_LAYER = 30;
@@ -143,30 +144,6 @@ function installChunks(N, taps, charCascade) {
   }
 }
 
-// (perf r2) three re-uploads matrix-array uniforms (directionalShadowMatrix[6] of the 5 cascades + character light)
-// on EVERY material switch -- it has no equality cache for arrays -- and in Chrome each such uniformMatrix4fv costs
-// ~0.1 ms (measured: ~115 uploads / 13.6 ms per frame at street level). A GL program keeps its uniform values, so an
-// upload identical to the last one sent to the same location is skipped. Locations are per program (a relink makes new
-// ones), so the cache is exact.
-function installUniformCache(renderer) {
-  const gl = renderer.getContext(); if (!gl || gl.__uCache) return; gl.__uCache = true;
-  const last = new WeakMap();
-  for (const fn of ['uniformMatrix4fv', 'uniformMatrix3fv']) {
-    const orig = gl[fn].bind(gl);
-    gl[fn] = function (loc, transpose, data, srcOffset, srcLength) {
-      if (loc && data && srcOffset === undefined && data.length > 16) { // arrays only: single matrices are mostly per-object
-        const prev = last.get(loc);
-        if (prev && prev.length === data.length) {
-          let same = true; for (let i = 0; i < data.length; i++) if (prev[i] !== data[i]) { same = false; break; }
-          if (same) return;
-          prev.set(data);
-        } else last.set(loc, Float32Array.from(data));
-      }
-      return srcOffset === undefined ? orig(loc, transpose, data) : orig(loc, transpose, data, srcOffset, srcLength);
-    };
-  }
-}
-
 export class CSM {
   constructor({ scene, quality, reversed, renderer }) {
     this.N = quality.cascades; this.temporal = quality.taa;
@@ -237,7 +214,7 @@ export class CSM {
     // frame for the character box alone). Render the shadow lights one at a time with the main camera's layer mask
     // swapped for that light's shadow-camera mask. ?perfoff restores the old behaviour.
     if (quality.perf !== false && renderer) { this._installLayerFix(renderer); this._layerFix = true; }
-    if (quality.perf !== false && renderer && !/[?&](perf2off|noucache)\b/.test(globalThis.location?.search ?? '')) installUniformCache(renderer); // (perf r2)
+    if (quality.perf !== false && renderer && !/[?&](perf2off|noucache)\b/.test(globalThis.location?.search ?? '')) installUniformCache(renderer, { singleShadow: !/[?&]noruntimecache\b/.test(globalThis.location?.search ?? '') }); // exact mobile + desktop cache
     this._fwd = new THREE.Vector3(); this._c = new THREE.Vector3(); this._r = new THREE.Vector3();
     this._u = new THREE.Vector3(); this._tmp = new THREE.Vector3();
     this.forceAll = true;

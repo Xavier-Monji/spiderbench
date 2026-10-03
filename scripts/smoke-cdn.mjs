@@ -120,9 +120,33 @@ try {
   assert.ok(stats.eviction.returned.residentBytes > 0);
   assert.ok(stats.eviction.returned.residentBytes <= stats.eviction.returned.maxResidentBytes);
   assert.ok(stats.eviction.sameRecipes); assert.ok(Number.isFinite(stats.eviction.ground)); assert.ok(stats.eviction.map);
+  // Same fixed scene/light state: conservative AABB culling may reduce draws, never change final pixels.
+  stats.culling = await page.evaluate(() => {
+    const C = __ctx, gl = C.renderer.getContext(), { W, H } = C.pipeline.size;
+    const draw = () => {
+      for (const l of C.lighting.csm.lights) l.shadow.needsUpdate = true;
+      window.originalRender();
+      const image = new Uint8Array(W * H * 4); gl.readPixels(0, 0, W, H, gl.RGBA, gl.UNSIGNED_BYTE, image);
+      return { image, stats: C.pipeline.stats };
+    };
+    C.boxCulling.enabled = false; const before = draw();
+    C.boxCulling.enabled = true; const after = draw();
+    let different = 0; for (let i = 0; i < before.image.length; i++) if (before.image[i] !== after.image[i]) different++;
+    return { before: before.stats, after: after.stats, different, components: before.image.length };
+  });
+  assert.equal(stats.culling.different, 0, 'Static culling changed rendered pixels or shadows');
+  assert.ok(stats.culling.after.calls <= stats.culling.before.calls);
+  assert.ok(stats.culling.after.triangles <= stats.culling.before.triangles);
   await page.locator('[data-nav=map]').tap();
   assert.equal(await page.evaluate(() => __ctx.flow.mode), 'menu');
   assert.equal(await page.evaluate(() => __ctx.sys.pause.tab), 'map');
+  stats.backgroundCache = await page.evaluate(() => {
+    __ctx.pipeline.render = window.originalRender;
+    for (let i = 0; i < 5; i++) __ctx.stepFrame(1 / 30);
+    return { draw: __ctx.pipeline.stats, policy: __ctx.framePolicy.stats, map: __ctx.sys.pause.pages[0].stats };
+  });
+  assert.equal(stats.backgroundCache.draw.calls, 1); assert.equal(stats.backgroundCache.draw.cached, true);
+  assert.ok(stats.backgroundCache.policy.cachedFrames >= 4); assert.ok(stats.backgroundCache.map.icons.hits >= 4);
   await page.locator('.sys-menu .tab').filter({ hasText: 'Settings' }).tap();
   assert.equal(await page.locator('[data-k=quality] button').count(), 1);
   assert.equal(await page.locator('[data-k=quality] button').textContent(), 'Mobile');
@@ -152,7 +176,7 @@ try {
   assert.ok(responses.some(r => r.url === info.entry && r.status === 200));
   assert.ok(responses.some(r => /\.js$/.test(r.url) && r.status === 200));
   assert.ok(responses.some(r => /spiderman\.glb$/.test(r.url) && r.status === 200));
-  console.log('PASS: opaque-origin assets, shaders, touch movement/swing input, eviction/return, collision/map/resume, portrait budget');
+  console.log('PASS: opaque-origin assets, shaders, touch movement/swing input, eviction/return, collision/map/resume, portrait budget, pixel-exact static culling and single-draw MAP background');
 } finally {
   await mkdir('artifacts', { recursive: true });
   const boot = await page.evaluate(() => ({ label: document.querySelector('#boot .lbl')?.textContent,

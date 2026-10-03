@@ -3,7 +3,7 @@
 import * as THREE from 'three';
 import { deflateSync, inflateSync, strToU8, strFromU8 } from 'fflate';
 import { GrowBuffer } from './buffer.js';
-import { compactGeometry } from '../render/geometry-budget.js';
+import { compactGeometry, compactGeometrySteps } from '../render/geometry-budget.js';
 
 // JSON snapshots avoid retaining recursively cloned JS arrays/objects for every distant tile. Read the source
 // value before JSON's toJSON hook (notably Color.toJSON, which would quantize linear colour to a hex integer).
@@ -176,6 +176,7 @@ export function createGeometryStreamer(scene, { budgetMs = 3, maxResidentBytes =
   const entries = [];
   scene.traverse(m => { const g = m.geometry, s = g?.userData.streaming; if (s) entries.push({ g, s, bytes: 0, d: Infinity }); });
   let job = null, residentBytes = 0, peakResidentBytes = 0;
+  const legacy = new URLSearchParams(globalThis.location?.search ?? '').has('noruntimecache');
   const priority = { facade: 0, roof: 5, detail: 30, roofAO: 50, roofStreaks: 60 };
   function evict(entry) {
     if (!entry.s.ready) return;
@@ -183,6 +184,11 @@ export function createGeometryStreamer(scene, { budgetMs = 3, maxResidentBytes =
     entry.g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(0), 3));
     entry.g.setIndex(new THREE.BufferAttribute(new Uint16Array(0), 1)); entry.g.clearGroups();
     entry.s.ready = false; entry.s.gpuReady = false; entry.s.version = (entry.s.version ?? 0) + 1; residentBytes -= entry.bytes;
+  }
+  function* expandEntry(entry) {
+    const g = yield* entry.s.recipe.expand(entry.s.options);
+    if (g) yield* compactGeometrySteps(g);
+    return g;
   }
   function update(p, budget = budgetMs) {
     const now = performance.now();
@@ -192,21 +198,32 @@ export function createGeometryStreamer(scene, { budgetMs = 3, maxResidentBytes =
     }
     while (performance.now() - now < budget) {
       if (!job) {
-        const next = entries.filter(e => !e.s.ready && e.d < e.s.recipe.range + 96 && (e.blockedUntil ?? 0) < now)
+        // Linear stable minimum: identical distance/role priority and tie order, without a filter + sort
+        // allocation over ~926 recipes for every job. Keep the developer A/B path for runtime profiling.
+        let next = null, score = Infinity;
+        if (legacy) next = entries.filter(e => !e.s.ready && e.d < e.s.recipe.range + 96 && (e.blockedUntil ?? 0) < now)
           .sort((a, b) => (a.d + (priority[a.s.recipe.role] ?? 60)) - (b.d + (priority[b.s.recipe.role] ?? 60)))[0];
+        else for (const e of entries) {
+          if (e.s.ready || e.d >= e.s.recipe.range + 96 || (e.blockedUntil ?? 0) >= now) continue;
+          const value = e.d + (priority[e.s.recipe.role] ?? 60);
+          if (value < score) { score = value; next = e; }
+        }
         if (!next) break;
-        job = { entry: next, iterator: next.s.recipe.expand(next.s.options) };
+        job = { entry: next, iterator: legacy ? next.s.recipe.expand(next.s.options) : expandEntry(next) };
       }
       const result = job.iterator.next();
       if (result.done) {
         const e = job.entry, g = result.value; job = null;
         if (!g) { e.s.ready = true; continue; }
-        compactGeometry(g);
+        if (legacy) compactGeometry(g);
         e.bytes = geometryBytes(g);
         if (e.bytes > maxResidentBytes) { e.blockedUntil = now + 60000; continue; }
-        const cold = entries.filter(c => c.s.ready && c !== e).sort((a, b) => b.d - a.d);
-        while (residentBytes + e.bytes > maxResidentBytes && cold.length) {
-          const c = cold.shift(); evict(c); c.blockedUntil = now + 3000;
+        // Do not create/sort an eviction list unless the residency cap actually needs eviction.
+        while (residentBytes + e.bytes > maxResidentBytes) {
+          let cold = null;
+          for (const c of entries) if (c.s.ready && c !== e && (!cold || c.d > cold.d)) cold = c;
+          if (!cold) break;
+          evict(cold); cold.blockedUntil = now + 3000;
         }
         e.g.dispose(); e.g.attributes = g.attributes; e.g.index = g.index;
         e.g.boundingBox = g.boundingBox; e.g.boundingSphere = g.boundingSphere; e.g.groups = g.groups;

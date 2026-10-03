@@ -18,3 +18,18 @@ test('mobile shaders compile, render colour and resize within the hard pixel bud
   stats = await page.evaluate(() => renderFixture.pipeline.size); expect(stats.W * stats.H).toBeLessThanOrEqual(1000000);
   expect(errors).toEqual([]); expect(shaderErrors).toEqual([]);
 });
+
+test('cached mobile presentation is pixel-exact, uses one draw, and a fresh resize/resume renders the scene again',async({page})=>{
+  await page.goto('/tests/fixtures/render.html?q=mobile');await page.waitForFunction(()=>window.renderFixture);
+  const result=await page.evaluate(()=>{
+    const F=renderFixture,gl=F.renderer.getContext(),size=F.pipeline.size;
+    const pixels=()=>{const p=new Uint8Array(size.W*size.H*4);gl.readPixels(0,0,size.W,size.H,gl.RGBA,gl.UNSIGNED_BYTE,p);return p;};
+    F.render();const before=pixels(),full=F.pipeline.stats;
+    // Change the scene deliberately: present() must use the completed grade, not re-render it.
+    F.highlight.position.x+=10;F.pipeline.present();const after=pixels(),cached=F.pipeline.stats;
+    let different=0;for(let i=0;i<before.length;i++)if(before[i]!==after[i])different++;
+    F.render();return {different,full,cached,fresh:F.pipeline.stats};
+  });
+  expect(result.different).toBe(0);expect(result.full.calls).toBeGreaterThan(5);
+  expect(result.cached).toMatchObject({calls:1,cached:true});expect(result.fresh.calls).toBeGreaterThan(5);
+});

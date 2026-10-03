@@ -4,6 +4,7 @@
 // waypoint, player), filters, district progress, hover cards, waypoint setting and fast travel.
 import * as THREE from 'three';
 import { badgeImage, badge } from './icons.js';
+import { createLayoutCache, projectMapIcons } from './map-layout.js';
 
 let PXM = 0.6;              // base-map pixels per metre (lowered automatically if the big canvas fails to allocate)
 const K_UP = 0.3, K_E = 0.07; // oblique extrusion: map-metres of north / east roof shift per metre of height
@@ -15,6 +16,8 @@ const CAT = [
 
 export function createMapPage(sys) {
   const { ctx, data, save, audio, travel } = sys;
+  const enabled = !new URLSearchParams(globalThis.location?.search ?? '').has('noruntimecache');
+  const iconCache = createLayoutCache({ enabled }), labelCache = createLayoutCache({ enabled });
   const el = document.createElement('div'); el.className = 'sys-map';
   el.innerHTML = `<canvas></canvas>
     <div class="legend sys-panel cut interactive"><div class="dist"><small>DISTRICT</small><b></b><div class="dprog"></div><div class="pbar"><i></i></div></div>
@@ -144,7 +147,7 @@ export function createMapPage(sys) {
   })();
   let pattern = null;
   // the base map bakes text: rebuild once the local UI font is ready
-  document.fonts?.load?.(`800 16px ${FONT}`).then(() => { base = null; dirty = true; }).catch(() => {});
+  document.fonts?.load?.(`800 16px ${FONT}`).then(() => { base = null; baseMips = null; iconCache.clear(); labelCache.clear(); dirty = true; }).catch(() => {});
 
   // ---------------------------------------------------------------- view
   const view = { x: 0, z: 0, s: 0.55 };
@@ -198,52 +201,62 @@ export function createMapPage(sys) {
     return _panels;
   }
   const ov = (a, b) => Math.max(0, Math.min(a[2], b[2]) - Math.max(a[0], b[0])) * Math.max(0, Math.min(a[3], b[3]) - Math.max(a[1], b[1]));
+  function mapStateKeys() {
+    const st = save.state, c = sys.crimes.active;
+    return [st.towers.join(','), st.stations.join(','), st.backpacks.join(','), st.landmarks.join(','),
+      st.secretPhotos.join(','), ...CAT.map(([k]) => filters[k]),
+      c, c?.pos.x, c?.pos.z, c?.icon, c?.title, c?.text];
+  }
   function drawLabels(proj, S, hoverD) {
-    const panels = panelRects();
-    const icons = proj.map(p => [p.X - S * 0.6, p.Y - S * 0.6, p.X + S * 0.6, p.Y + S * 0.6]);
-    // keep names off the GPS route: sample it every ~24 px as small obstacles
-    const route = travel.route;
-    if (route && route.length > 1) for (let i = 1; i < route.length; i++) {
-      const [ax, ay] = toS(route[i - 1][0], route[i - 1][1]), [bx, by] = toS(route[i][0], route[i][1]); const n = Math.max(1, Math.ceil(Math.hypot(bx - ax, by - ay) / (24 * dpr)));
-      for (let k = 0; k <= n; k++) { const x = ax + (bx - ax) * k / n, y = ay + (by - ay) * k / n; icons.push([x - 8 * dpr, y - 8 * dpr, x + 8 * dpr, y + 8 * dpr]); }
-    }
-    const fs = Math.round(THREE.MathUtils.clamp(30 * Math.pow(view.s / 0.55, 0.5), 18, 44) * dpr);
-    const placed = [];
-    for (const d of data.districts) {
-      const rx0 = Math.max(d.rect.x0, LAND.x0), rx1 = Math.min(d.rect.x1, LAND.x1);
-      const [sx0, sy0] = toS(rx0, d.rect.z0), [sx1, sy1] = toS(rx1, d.rect.z1);
-      if (sx1 < 0 || sx0 > W || sy1 < 0 || sy0 > H) continue;
-      const lock = !revealed(d.id);
-      const dw = (sx1 - sx0) * 0.86;
-      g.save(); g.textAlign = 'center'; g.textBaseline = 'middle';
-      let f2 = fs; g.font = `800 ${f2}px ${FONT}`; g.letterSpacing = `${Math.round(f2 * 0.18)}px`;
-      let tw = g.measureText(d.name.toUpperCase()).width; if (tw > dw) { f2 = Math.max(11 * dpr, Math.floor(f2 * dw / tw)); g.font = `800 ${f2}px ${FONT}`; g.letterSpacing = `${Math.round(f2 * 0.18)}px`; tw = g.measureText(d.name.toUpperCase()).width; }
-      const sf = Math.max(10 * dpr, Math.round(f2 * 0.42));
-      // one uniform style; the status line only for the hovered district (locked ones get a small red marker)
-      const hot = hoverD === d;
-      const sub = !hot ? '' : lock ? 'SIGNAL SCRAMBLED · FIND THE RESEARCH TOWER' : `${Math.round(districtPct(d) * 100)}% COMPLETE`;
-      const bw = tw + f2 + 16 * dpr, bh = f2 * 1.9; // size from the name only so hovering never moves the label
-      // visible part of the district (label must stay on screen)
-      const vx0 = Math.max(sx0, 0) + bw / 2, vx1 = Math.min(sx1, W) - bw / 2, vy0 = Math.max(sy0, 0) + bh / 2, vy1 = Math.min(sy1, H) - bh / 2;
-      if (vx1 < vx0 || vy1 < vy0) { g.restore(); continue; }
-      let best = null, bs = Infinity;
-      for (const fx of [0.5, 0.4, 0.6, 0.3, 0.7, 0.15, 0.85]) for (const fy of [0.22, 0.1, 0.35, 0.5, 0.65, 0.8, 0.92]) {
-        const X = vx0 + (vx1 - vx0) * fx, Y = vy0 + (vy1 - vy0) * fy, box = [X - bw / 2, Y - bh / 2, X + bw / 2, Y + bh / 2];
-        let sc = Math.abs(fx - 0.5) * 30 + Math.abs(fy - 0.22) * 20;
-        for (const r of icons) sc += ov(box, r) / (S * S) * 60;
-        for (const r of panels) sc += ov(box, r) / (dpr * dpr);
-        for (const r of placed) sc += ov(box, r) / 5;
-        if (sc < bs) { bs = sc; best = [X, Y, box]; }
+    const panels = panelRects(), route = travel.route;
+    const layouts = labelCache.get([proj, S, W, H, dpr, view.x, view.z, view.s, ...panels.flat(),
+      panels.length, route, ...(route?.flat() || []), ...mapStateKeys()], () => {
+      const icons = proj.map(p => [p.X - S * 0.6, p.Y - S * 0.6, p.X + S * 0.6, p.Y + S * 0.6]);
+      if (route && route.length > 1) for (let i = 1; i < route.length; i++) {
+        const [ax, ay] = toS(route[i - 1][0], route[i - 1][1]), [bx, by] = toS(route[i][0], route[i][1]);
+        const n = Math.max(1, Math.ceil(Math.hypot(bx - ax, by - ay) / (24 * dpr)));
+        for (let k = 0; k <= n; k++) { const x = ax + (bx - ax) * k / n, y = ay + (by - ay) * k / n; icons.push([x - 8 * dpr, y - 8 * dpr, x + 8 * dpr, y + 8 * dpr]); }
       }
-      const [X, Y, box] = best; placed.push(box);
-      const Yt = Y - bh * 0.18;
+      const fs = Math.round(THREE.MathUtils.clamp(30 * Math.pow(view.s / 0.55, 0.5), 18, 44) * dpr);
+      const placed = [], out = [];
+      for (const d of data.districts) {
+        const rx0 = Math.max(d.rect.x0, LAND.x0), rx1 = Math.min(d.rect.x1, LAND.x1);
+        const [sx0, sy0] = toS(rx0, d.rect.z0), [sx1, sy1] = toS(rx1, d.rect.z1);
+        if (sx1 < 0 || sx0 > W || sy1 < 0 || sy0 > H) continue;
+        const lock = !revealed(d.id), dw = (sx1 - sx0) * 0.86;
+        g.save();
+        let f2 = fs; g.font = `800 ${f2}px ${FONT}`; g.letterSpacing = `${Math.round(f2 * 0.18)}px`;
+        let tw = g.measureText(d.name.toUpperCase()).width;
+        if (tw > dw) { f2 = Math.max(11 * dpr, Math.floor(f2 * dw / tw)); g.font = `800 ${f2}px ${FONT}`; g.letterSpacing = `${Math.round(f2 * 0.18)}px`; tw = g.measureText(d.name.toUpperCase()).width; }
+        const sf = Math.max(10 * dpr, Math.round(f2 * 0.42)), bw = tw + f2 + 16 * dpr, bh = f2 * 1.9;
+        const vx0 = Math.max(sx0, 0) + bw / 2, vx1 = Math.min(sx1, W) - bw / 2;
+        const vy0 = Math.max(sy0, 0) + bh / 2, vy1 = Math.min(sy1, H) - bh / 2;
+        if (vx1 < vx0 || vy1 < vy0) { g.restore(); continue; }
+        let best = null, bs = Infinity;
+        for (const fx of [0.5, 0.4, 0.6, 0.3, 0.7, 0.15, 0.85]) for (const fy of [0.22, 0.1, 0.35, 0.5, 0.65, 0.8, 0.92]) {
+          const X = vx0 + (vx1 - vx0) * fx, Y = vy0 + (vy1 - vy0) * fy, box = [X - bw / 2, Y - bh / 2, X + bw / 2, Y + bh / 2];
+          let sc = Math.abs(fx - 0.5) * 30 + Math.abs(fy - 0.22) * 20;
+          for (const r of icons) sc += ov(box, r) / (S * S) * 60;
+          for (const r of panels) sc += ov(box, r) / (dpr * dpr);
+          for (const r of placed) sc += ov(box, r) / 5;
+          if (sc < bs) { bs = sc; best = [X, Y, box]; }
+        }
+        const [X, Y, box] = best; placed.push(box);
+        out.push({ d, lock, f2, tw, sf, X, Yt: Y - bh * 0.18 }); g.restore();
+      }
+      return out;
+    });
+    for (const { d, lock, f2, tw, sf, X, Yt } of layouts) {
+      g.save(); g.textAlign = 'center'; g.textBaseline = 'middle';
+      g.font = `800 ${f2}px ${FONT}`; g.letterSpacing = `${Math.round(f2 * 0.18)}px`;
       g.shadowColor = 'rgba(0,6,24,.95)'; g.shadowBlur = 10 * dpr;
       g.fillStyle = 'rgba(255,255,255,.88)'; g.fillText(d.name.toUpperCase(), X, Yt);
       if (lock) { const lx = X - tw / 2 - f2 * 0.55, ly = Yt, r = f2 * 0.2; g.shadowBlur = 0; g.fillStyle = '#e3262f'; g.beginPath(); g.moveTo(lx, ly - r); g.lineTo(lx + r, ly); g.lineTo(lx, ly + r); g.lineTo(lx - r, ly); g.closePath(); g.fill(); }
+      const hot = hoverD === d;
+      const sub = !hot ? '' : lock ? 'SIGNAL SCRAMBLED · FIND THE RESEARCH TOWER' : `${Math.round(districtPct(d) * 100)}% COMPLETE`;
       if (sub) {
         g.shadowBlur = 6 * dpr; g.letterSpacing = `${Math.round(sf * 0.2)}px`; g.font = `800 ${sf}px ${FONT}`;
         const pc = districtPct(d); g.fillStyle = lock ? '#ff5a61' : pc >= 1 ? '#f5c02e' : 'rgba(170,205,255,.95)';
-        // keep the (wider) status line fully on screen and clear of the side panels
         const sw = g.measureText(sub).width, lp = panels[0] ? panels[0][2] : 0, rp = panels[1] ? panels[1][0] : W;
         const yy = Yt + f2 * 0.88, overL = panels[0] && yy > panels[0][1] && yy < panels[0][3], overR = panels[1] && yy > panels[1][1] && yy < panels[1][3];
         const X2 = Math.min(Math.max(X, (overL ? lp : 0) + sw / 2 + 8 * dpr), (overR ? rp : W) - sw / 2 - 8 * dpr);
@@ -316,16 +329,10 @@ export function createMapPage(sys) {
       g.restore();
     }
     // icons (painter's order by screen y); secret-photo search areas under everything
-    const list = items(); drawn = [];
+    drawn.length = 0;
     const S = Math.round(THREE.MathUtils.clamp(30 * Math.sqrt(view.s / 0.55), 22, 42) * dpr);
-    const proj = list.map(it => { const [X, Y] = toSY(it.x, itemY(it), it.z); return { it, X, Y }; }).sort((a, b) => a.Y - b.Y);
-    // de-clutter: push overlapping (full-size) icons apart a little, a few relaxation passes
-    const big = proj.filter(p => !p.it.small && !p.it.area), minD = S * 0.95;
-    for (let pass = 0; pass < 4; pass++) for (let i = 0; i < big.length; i++) for (let j = i + 1; j < big.length; j++) {
-      const a = big[i], b = big[j]; let dx = b.X - a.X, dy = b.Y - a.Y; const d = Math.hypot(dx, dy);
-      if (d >= minD) continue; if (d < 0.01) { dx = 1; dy = 0; } const k = (minD - d) / 2 / Math.max(d, 0.01);
-      a.X -= dx * k; a.Y -= dy * k; b.X += dx * k; b.Y += dy * k;
-    }
+    const proj = iconCache.get([view.x, view.z, view.s, W, H, dpr, S, ...mapStateKeys()],
+      () => projectMapIcons(items(), it => toSY(it.x, itemY(it), it.z), S));
     drawLabels(proj, S, hoverD);
     for (const { it, X, Y } of proj) {
       if (!it.area) continue; const [ax, ay] = toS(it.x, it.z);
@@ -471,6 +478,7 @@ export function createMapPage(sys) {
 
   return {
     id: 'map', title: 'Map', el, reveal,
+    get stats() { return { icons: iconCache.stats, labels: labelCache.stats }; },
     hints: [['Click', 'Waypoint'], ['R-Click', 'Clear'], ['C', 'Center']],
     footer: () => `${save.state.towers.length}/${data.towers.length} DISTRICTS UNLOCKED`,
     show() { drawChecked = false; el.querySelector('.zoomhint').classList.remove('fade'); clearTimeout(hintT); hintT = setTimeout(() => el.querySelector('.zoomhint').classList.add('fade'), 5000); center(); hideCard(); dirty = true; updateLegend(); window.__sysMap = { toS: (x, z) => { const [a, b] = toS(x, z); return [a / dpr, b / dpr]; }, view }; },

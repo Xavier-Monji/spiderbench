@@ -94,6 +94,7 @@ export function initSystems(ctx) {
     ui.root.querySelectorAll('.sys-xp,.sys-obj,.sys-toasts,.sys-crime').forEach(e => { e.style.zoom = z; });
     ui.root.style.setProperty('--sub-scale', String(s.subtitleSize ?? 1));
     document.body.classList.toggle('ui-minimal', s.minimalHud === true); // Minimal HUD: only the minimap stays (css in systems.css)
+    ctx.framePolicy?.invalidate();
     emit('settings:changed', s);
   };
   if (save.state.settings.crimesOn === false) sys.crimes.enable(false);

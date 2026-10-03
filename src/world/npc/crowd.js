@@ -19,6 +19,7 @@ import { tsCrowdSpots } from '../timessq.js'; // + timessq: static Times Square 
 import { PLAZA_CROWD_SPOTS } from '../props.js'; // (street r7) forecourt-plaza people
 import { PARK_CROWD_SPOTS } from '../park.js'; // (peds r6) lawn + park-edge people (were box figures in park.js)
 import { GC_CROWD_SPOTS } from '../grandcentral.js'; // (street r7) Park Av podium roof garden + colonnade people
+import { SpatialCandidates } from '../spatial-candidates.js';
 import { perf2Off } from '../tilebatch.js'; // (perf r2) A/B switch
 
 const MOBILE = !!getQuality().mobile;
@@ -684,7 +685,7 @@ function createBlobs(scene, animTex, meta) {
 }
 
 // ------------------------------------------------------------------ crowd
-export async function createCrowd({ scene, blocks, parkPaths, props, roads, phase }) {
+export async function createCrowd({ scene, blocks, parkPaths, props, roads, phase, runtimeCache = !perf2Off('noruntimecache') }) {
   const [meta, bin, pedTex, bakeTex] = await Promise.all([
     fetch(assetUrl('/assets/city/npc/people.json')).then(r => r.json()),
     fetch(assetUrl('/assets/city/npc/people.bin')).then(r => r.arrayBuffer()),
@@ -1416,6 +1417,16 @@ export async function createCrowd({ scene, blocks, parkPaths, props, roads, phas
     else if (a.mode === 'wander') { a.pause = 0; setClip(a, 'walk', walkRate(a, a.speed)); }
   };
   const onRoad = (x, z) => { const t = streetsAt(x, z).type; return t === 'avenue' || t === 'street' || t === 'intersection'; };
+  const cacheRoad = runtimeCache;
+  // Street layout is immutable. AI/head-look steps often do not move a standing person, but previously
+  // re-ran the irregular-road polygon query (sometimes twice). Exact x/z keys, not approximate grid heights.
+  const agentOnRoad = a => {
+    if (!cacheRoad) return onRoad(a.x, a.z);
+    if (a._roadX !== a.x || a._roadZ !== a.z || a._road === undefined) {
+      a._roadX = a.x; a._roadZ = a.z; a._road = onRoad(a.x, a.z);
+    }
+    return a._road;
+  };
 
   // returns true when the agent is held in place by a reaction this frame
   const reactions = (a, dt, d) => {
@@ -1594,7 +1605,7 @@ export async function createCrowd({ scene, blocks, parkPaths, props, roads, phas
     }
     if (a.mode === 'cross') {
       const done = moveTo(a, a.fx, a.fz, a.xspd, dt);
-      if (onRoad(a.x, a.z)) a.xw.peds++;
+      if (agentOnRoad(a)) a.xw.peds++;
       if (done && a.ping && a.cw && a.cw.nb && a.cw.nb.agents && a.rng() < 0.4) { a.ping = false; if (a.e === undefined) a.e = 2.2 + a.rng() * 0.75; } // (peds r4) corner crowds disperse into the next block's walkers (refilled by arrivals): no fixed knot
       if (done && a.ping) { // corner crowd: wait on this corner for the next walk signal, then cross back
         const ox = a.tx, oz = a.tz; a.tx = a.fx; a.tz = a.fz; a.fx = ox; a.fz = oz;
@@ -1685,6 +1696,8 @@ export async function createCrowd({ scene, blocks, parkPaths, props, roads, phas
   // apart to ~0.62 m (walkers through their lane offset, everyone else directly); 1 m hash grid, rebuilt per frame
   const SEP = 0.62, SEP_D = 55, sgrid = new Map(), snear = [];
   const skey = (ix, iz) => (ix & 0xffff) * 65536 + (iz & 0xffff);
+  const staticIndex = runtimeCache ? new SpatialCandidates(statics,
+    { always: a => a.mode === 'path' || a.mode === 'prom' }) : null;
   const sLists = [agents, statics], sUsed = []; // (perf r3) cell arrays are recycled (emptied), not re-allocated every frame
   const separate = (cp, dt) => {
     for (const c of sUsed) c.length = 0;
@@ -1721,11 +1734,12 @@ export async function createCrowd({ scene, blocks, parkPaths, props, roads, phas
   const frustum = new THREE.Frustum(), pv = new THREE.Matrix4(), sph = new THREE.Sphere();
   const heightAt = (a) => {
     if (a.park || a.elev || a.mode === 'path' || a.mode === 'sit' || a.mode === 'prom') return a.y ?? G.CURB_H; // (street r7) a.elev
-    return onRoad(a.x, a.z) ? 0 : G.CURB_H;
+    return agentOnRoad(a) ? 0 : G.CURB_H;
   };
   let frame = 0;
   const api = {
     agents, statics, pools: allPools,
+    invalidateStatics() { staticIndex?.invalidate(); }, // tools that directly edit a static actor's position
     setPlayer(st) {
       player.pos.copy(st.pos); player.vel.copy(st.vel); player.air = st.air; player.ground = st.ground ?? 0;
       player.landT = st.landT; player.landPos = st.landPos;
@@ -1753,6 +1767,10 @@ export async function createCrowd({ scene, blocks, parkPaths, props, roads, phas
       pv.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse); frustum.setFromProjectionMatrix(pv);
       for (const p of allPools) p.begin();
       dogs?.begin(); blobs?.begin(); if (blobs) blobs.mat.uniforms.uTime.value = time;
+      // Same radius checks inside the old loop; conservative cells + a whole-cell margin also contain
+      // everyone touched by separation. Paths/prom walkers remain candidates even on the other river.
+      const staticCandidates = staticIndex?.query(cp.x, cp.z, LOD_D[2] + 20 + 64) ?? statics;
+      sLists[1] = staticCandidates;
       separate(cp, dt); // (peds r2)
       const handle = (a) => {
         const dxc = a.x - cp.x, dzc = a.z - cp.z, dc2 = dxc * dxc + dzc * dzc;
@@ -1770,15 +1788,15 @@ export async function createCrowd({ scene, blocks, parkPaths, props, roads, phas
             else if (a.mode === 'wander') stepWander(a, sdt);
             else if (a.mode === 'prom') stepProm(a, sdt);
             else if (a.mode === 'stand') { if (a.hx !== undefined) { a.x += (a.hx - a.x) * Math.min(1, sdt * 0.5); a.z += (a.hz - a.z) * Math.min(1, sdt * 0.5); turnTo(a, a.hry, 1.5, sdt); } setClip(a, a.idleClip); }
-          } else if (a.mode === 'cross') { if (onRoad(a.x, a.z)) a.xw.peds++; }
+          } else if (a.mode === 'cross') { if (agentOnRoad(a)) a.xw.peds++; }
           if (d < 40) { look(a, sdt, d); dodge(a, d, sdt); } else if (dc2 < 60 * 60) look(a, sdt, 99); // (peds r3) glances near the camera
           else if (a.lookYaw || a.lookPitch) { a.lookYaw *= 0.9; a.lookPitch *= 0.9; }
           a._hy = undefined; // (perf r2) moved: re-derive the cached height / on-road flag
-        } else if (a.mode === 'cross' && (a._hy === undefined ? onRoad(a.x, a.z) : a._or)) a.xw.peds++; // (perf r2) cached
+        } else if (a.mode === 'cross' && (a._hy === undefined ? agentOnRoad(a) : a._or)) a.xw.peds++; // (perf r2) cached
         if (dc2 > LOD_D[2] * LOD_D[2]) return;
         if (dc2 > 400) { sph.center.set(a.x, a.y + 0.9, a.z); sph.radius = 1.1; if (!frustum.intersectsSphere(sph)) return; }
         const lod = dc2 < LOD_D[0] * LOD_D[0] ? 0 : dc2 < LOD_D[1] * LOD_D[1] ? 1 : 2;
-        if (a._hy === undefined) { a._hy = heightAt(a); a._or = a._hy === 0 && onRoad(a.x, a.z); } // (perf r2) only after a step
+        if (a._hy === undefined) { a._hy = heightAt(a); a._or = a._hy === 0 && agentOnRoad(a); } // (perf r2) only after a step
         const hy = a._hy;
         pools[a.vi][lod].push(a, a.x, hy, a.z);
         if (blobs && dc2 < BLOB_D * BLOB_D && a.mode !== 'sit') blobs.push(a, hy, Math.sqrt(dc2)); // (peds r2) contact shadow
@@ -1786,14 +1804,14 @@ export async function createCrowd({ scene, blocks, parkPaths, props, roads, phas
       };
       for (const a of agents) handle(a);
       const q2 = PF ? performance.now() : 0;
-      for (const a of statics) {
+      for (const a of staticCandidates) {
         const dx = a.x - cp.x, dz = a.z - cp.z;
         if (dx * dx + dz * dz > (LOD_D[2] + 20) ** 2 && !(a.mode === 'path' || a.mode === 'prom')) continue;
         if (dx * dx + dz * dz > (LOD_D[2] + 20) ** 2) { // cheap far advance for moving statics
           if ((frame + a.vi) % 8 === 0) { if (a.mode === 'path') stepPath(a, dt * 8); else stepProm(a, dt * 8); a._hy = undefined; } // (perf r2)
           continue;
         }
-        handle(a);
+        handle(a); staticIndex?.update(a);
       }
       if (agents.some(a => a.dead)) compact();
       const q3 = PF ? performance.now() : 0;

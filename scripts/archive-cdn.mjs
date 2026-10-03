@@ -25,7 +25,7 @@ const destination = 'deployment/spiderbench-cdn.zip', out = createWriteStream(de
 let offset = 0;
 const put = async data => { sha.update(data); offset += data.length; if (!out.write(data)) await once(out, 'drain'); };
 const releaseMetadata = [];
-for (const file of ['deployment/release.json', 'deployment/live-verification.json']) {
+for (const file of ['deployment/release.json', 'deployment/live-verification.json', 'deployment/startup-memory.json', 'deployment/runtime-performance.json']) {
   try { await readFile(file); releaseMetadata.push(file); } catch (e) { if (e.code !== 'ENOENT') throw e; }
 }
 for (const file of [...await files('dist'), 'LICENSE', 'deployment/README_JA.md', 'deployment/launcher.html', 'deployment/launcher.data-uri.txt', 'deployment/build-info.json', ...releaseMetadata]) {

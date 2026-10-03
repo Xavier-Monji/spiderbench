@@ -105,6 +105,7 @@ export class CanopyBatch {
     const col = new THREE.Color();
     for (let i = 0; i < this.M.length; i++) { mesh.setMatrixAt(i, this.M[i]); mesh.setColorAt(i, col.setRGB(this.C[i * 3], this.C[i * 3 + 1], this.C[i * 3 + 2])); }
     mesh.instanceMatrix.needsUpdate = true; mesh.instanceColor.needsUpdate = true;
+    mesh.userData.staticBounds = true; // fixed matrices; fade only contracts vertices (safe tight AABB)
     mesh.computeBoundingSphere();
     mesh.castShadow = castShadow && !this.fade; mesh.receiveShadow = true; mesh.name = name; // (faded fills: the shadow pass would not shrink them)
     if (opts.smallCasters) mesh.userData.smallCasters = true;

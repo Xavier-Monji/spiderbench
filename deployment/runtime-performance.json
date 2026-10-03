@@ -1,0 +1,222 @@
+{
+  "target": {
+    "soc": "Apple A14 Bionic",
+    "cpuCores": 6,
+    "gpuCores": 4,
+    "ramGiB": 4
+  },
+  "measuredAt": "2026-10-03T01:05:15.044Z",
+  "hardwareVerified": false,
+  "qualityChanges": "None in this runtime update. Same geometry, textures, shadows, render/pixel budgets, distances, density and simulation cadence.",
+  "environment": {
+    "engine": "153.0.8010.0",
+    "gpu": "SwiftShader (software)",
+    "viewport": {
+      "width": 1180,
+      "height": 820,
+      "dpr": 2
+    },
+    "warmupFrames": 180,
+    "gameplaySamples": 180,
+    "mapSamples": 80,
+    "caveat": "Sandbox CPU measurements and draw/pixel comparison; not physical A14/Safari FPS or total device RAM. CPU timings exclude 3D rendering and shader warm-up; their reciprocal is NOT game FPS. Single-run maxima and scheduling vary."
+  },
+  "reference": {
+    "variant": "noruntimecache developer A/B mode",
+    "measuredAt": "2026-10-03T00:47:22.302Z",
+    "gameplayCpu": {
+      "samples": 180,
+      "mean": 27.379999999994308,
+      "median": 23.5,
+      "p95": 47.5,
+      "max": 229.29999999981374
+    },
+    "mapCpu": {
+      "samples": 80,
+      "mean": 25.001249999983703,
+      "median": 14.800000000279397,
+      "p95": 93.8000000002794,
+      "max": 213.10000000009313
+    },
+    "heapAfterGc": 871637351,
+    "stream": {
+      "tiles": 926,
+      "ready": 14,
+      "recipeBytes": 92312493,
+      "residentBytes": 65973423,
+      "peakResidentBytes": 65973423,
+      "maxResidentBytes": 67108864
+    }
+  },
+  "optimized": {
+    "gameplayCpu": {
+      "samples": 180,
+      "mean": 23.184444444448065,
+      "median": 21.100000000093132,
+      "p95": 41.89999999990687,
+      "max": 62.200000000186265
+    },
+    "mapCpu": {
+      "samples": 80,
+      "mean": 2.9912499999685678,
+      "median": 1.3999999999068677,
+      "p95": 14.599999999627471,
+      "max": 19.5
+    },
+    "worldParts": {
+      "ground": 0.03634881013031892,
+      "groundMax": 1.1000000000931323,
+      "highways": 0.35220300680586397,
+      "highwaysMax": 8.100000000093132,
+      "hero": 0.00013254341599837984,
+      "heroMax": 0.10000000009313226,
+      "props": 0.13894485082232227,
+      "propsMax": 3.7000000001862645,
+      "trees": 6.098150939674112,
+      "treesMax": 18.100000000093132,
+      "traffic": 4.666143459786865,
+      "trafficMax": 30.799999999813735,
+      "peds": 10.580831009943045,
+      "pedsMax": 31.600000000093132
+    },
+    "heapAfterGc": 876184121,
+    "stream": {
+      "tiles": 926,
+      "ready": 14,
+      "recipeBytes": 92312493,
+      "residentBytes": 59704932,
+      "peakResidentBytes": 59704932,
+      "maxResidentBytes": 67108864
+    },
+    "life": {
+      "cars": 703,
+      "activeLinks": 210,
+      "drawn": 384,
+      "junction": {
+        "junctions": 632,
+        "moves": 7306,
+        "hot": 49,
+        "occ": 161,
+        "wait": 16,
+        "deny": [
+          2271,
+          0,
+          75,
+          1060,
+          0
+        ],
+        "broken": 0,
+        "laneChanges": 1,
+        "refill": 71,
+        "drain": 3,
+        "want": 714,
+        "have": 701
+      },
+      "people": 10074,
+      "peopleDrawn": 524,
+      "parkPeople": 0,
+      "nearTier": 878,
+      "pigeons": 18,
+      "flocks": 574
+    },
+    "drawWork": {
+      "before": {
+        "calls": 463,
+        "triangles": 5537033
+      },
+      "after": {
+        "calls": 457,
+        "triangles": 5529107
+      },
+      "cachedMap": {
+        "calls": 1,
+        "triangles": 1,
+        "cached": true
+      }
+    },
+    "pixelComparison": {
+      "components": 376832,
+      "different": 0,
+      "maxDifference": 0
+    },
+    "layout": {
+      "icons": {
+        "builds": 1,
+        "hits": 89
+      },
+      "labels": {
+        "builds": 3,
+        "hits": 87
+      }
+    },
+    "policy": {
+      "worldFrames": 362,
+      "cachedFrames": 89
+    },
+    "uniforms": {
+      "uploads": 686,
+      "skipped": 65
+    }
+  },
+  "functional": {
+    "nodeTests": 45,
+    "browserTests": 12,
+    "trafficEquivalentFrames": 180,
+    "crowdEquivalentFrames": 90,
+    "map": "Byte-identical cached/uncached Canvas pixels, including locked/unlocked districts and GPS route; zoom/resize invalidation",
+    "streamedGeometry": "Sliced packing matches every pre-change packed byte; same positions/indices/UVs and shared-attribute identity"
+  },
+  "productionMock": {
+    "finalHeapBytes": 752382485,
+    "requests": 81,
+    "culling": {
+      "before": {
+        "calls": 374,
+        "triangles": 3910597
+      },
+      "after": {
+        "calls": 368,
+        "triangles": 3896015
+      },
+      "different": 0,
+      "components": 738912
+    },
+    "backgroundCache": {
+      "draw": {
+        "calls": 1,
+        "triangles": 1,
+        "cached": true
+      },
+      "policy": {
+        "worldFrames": 7,
+        "cachedFrames": 4
+      },
+      "map": {
+        "icons": {
+          "builds": 1,
+          "hits": 4
+        },
+        "labels": {
+          "builds": 1,
+          "hits": 4
+        }
+      }
+    },
+    "touch": {
+      "move": {
+        "x": 0.8,
+        "y": 0.6
+      },
+      "swing": true,
+      "mode": "swing",
+      "web": true
+    },
+    "landscapeLitFraction": 0.9619930453365326,
+    "portraitLitFraction": 1,
+    "errors": [],
+    "failed": []
+  },
+  "publication": {
+    "status": "pending live-CDN verification"
+  }
+}

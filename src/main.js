@@ -23,6 +23,9 @@ import { getQuality } from './render/quality.js';
 import { assetUrl } from './platform/assets.js';
 import { createResolutionController } from './render/resolution.js';
 import { createTouchControls } from './ui/touch-controls.js';
+import { createFramePolicy, stepGameFrame } from './render/frame-policy.js';
+import { installBoxFrustumCulling, markBoxCullable } from './render/box-culling.js';
+import { nextFrameDeadline } from './render/frame-clock.js';
 
 const params = new URLSearchParams(location.search);
 const shotName = params.get('shot');
@@ -49,6 +52,7 @@ if (renderer.capabilities.reversedDepthBuffer && !params.has('nozfix')) {
 }
 document.body.appendChild(renderer.domElement);
 
+let ctxBoxCulling = null;
 const scene = new THREE.Scene();
 // far plane 150 km (foundation agent): the harbour, far shores and distant hinterland run out to the (fogged) true
 // horizon instead of being clipped into a hard band at 6 km (reversed float depth keeps precision at this range)
@@ -56,6 +60,9 @@ const camera = new THREE.PerspectiveCamera(55, innerWidth / innerHeight, 0.1, qu
 
 const lighting = createLighting({ renderer, scene });
 const world = await buildCity({ scene, renderer });
+if (quality.mobile && !params.has('noruntimecache')) {
+  ctxBoxCulling = installBoxFrustumCulling(); markBoxCullable(scene);
+}
 const input = createInput(renderer.domElement);
 await boot.stage('player');
 const player = await createPlayer({ scene, world, camera, input, renderer });
@@ -66,12 +73,14 @@ resolution.attach(pipeline);
 
 const resize = () => {
   camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); resolution.resize();
+  window.__ctx?.framePolicy?.invalidate();
 };
 addEventListener('resize', resize);
 window.visualViewport?.addEventListener('resize', resize);
 
-const ctx = { THREE, renderer, scene, camera, lighting, world, player, hud, pipeline, input, quality, resolution };
+const ctx = { THREE, renderer, scene, camera, lighting, world, player, hud, pipeline, input, quality, resolution, boxCulling: ctxBoxCulling };
 ctx.systems = ctx.systems || []; // C5: game systems (src/game/**) push {update(dt)} here
+ctx.framePolicy = createFramePolicy(ctx);
 window.__ctx = ctx;
 const touchControls = ctx.touchControls = createTouchControls(ctx);
 if (touchControls) ctx.systems.push(touchControls);
@@ -93,6 +102,7 @@ document.addEventListener('visibilitychange', () => { input.clear(); touchContro
 const warmup = !shotName && !params.has('nowarm') ? createWarmup(renderer, scene, camera, { mirrorLayers: quality.mobile ? null : [REFL_LAYER, BIG_CASTER_LAYER], perStep: quality.mobile ? 2 : 4 }) : null;
 // first the state the first frame would set that is part of the program keys: the sky IBL (scene.environment, from the
 // first lighting update) and the pipeline's NO_SSR material defines
+ctx.warmup = warmup;
 if (warmup) {
   lighting.update(camera); pipeline.prepareMaterials?.(); warmup.rescan();
   if (quality.mobile) { // yield between small compile batches instead of one large synchronous flush
@@ -129,10 +139,7 @@ if (shotName) {
   function frame(realDt) {
     ctx.realDt = realDt;
     const dt = ctx.realDt * (ctx.timeScale ?? 1);
-    player.update(dt); world.update(dt, camera); lighting.update(camera); hud.update(dt);
-    for (const s of ctx.systems) s.update?.(dt);
-    pipeline.render(dt);
-    warmup?.step(); // (perf r3)
+    stepGameFrame(ctx, dt);
     if (++framesDrawn === 1) boot.sub(0.4); // the first frame (remaining uploads / links) is in
   }
   // tools (tools/film.mjs): ctx.manualStep = true pauses the real-time loop; ctx.stepFrame(dt) then advances exactly one
@@ -142,7 +149,7 @@ if (shotName) {
     if (document.hidden || contextLost || ctx.manualStep) { lastFrame = null; nextFrame = 0; return; }
     if (interval && now + 0.75 < nextFrame) return;
     const realDt = lastFrame == null ? 1 / (quality.targetFps || 60) : (now - lastFrame) / 1000;
-    lastFrame = now; nextFrame = now + interval;
+    lastFrame = now; nextFrame = nextFrameDeadline(nextFrame, now, interval);
     if (framesDrawn > 90 && ctx.flow?.isPlaying) resolution.observeFrame(realDt);
     frame(Math.min(realDt, 1 / 20));
   });

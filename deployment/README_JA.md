@@ -13,6 +13,7 @@
 - `deployment/build-info.json`: 実際のCDN URL、バイト数、公開・検証状態。
 - `deployment/release.json`: 配信専用コミットの40桁SHAとGitツリー、アセット総サイズ。
 - `deployment/live-verification.json`: 実CDNから起動したブラウザ検証の結果と公開CIへのリンク。
+- `deployment/runtime-performance.json`: A14向け実行時最適化の比較CPU計測・ピクセル同一性・機能回帰検証（実機FPSではありません）。
 - `deployment/startup-memory.json`: 初期読み込みクラッシュ対策前後のソフトウェアブラウザ計測（実機認定ではありません）。
 
 `dist/` はソースの作業ツリーでは従来どおり Git 管理対象外です。公開時には `dist/` と LICENSE **だけ**のGitツリーを別コミットに保存し、固定セッションブランチのソースコミットの第2親として履歴に保持します。ソース／デスクトップ用原本はそのまま残します。ZIPや公開コミットからも復元できます。
@@ -52,6 +53,30 @@
 
 対象テクスチャのミップ付き RGBA **理論値**は約1004.5 → 191.1 MiB（約81%減）。これは GPU／RAM 実測値でも全アセットの合計でもありません。ビルドの `dist/mobile-assets.json` に寸法・レイヤー数・画像／GLBサイズを記録します。
 
+## 2026-10-03: 画質を維持する実行時最適化
+
+今回の更新では、街の形状・テクスチャ・描画解像度・距離・影設定・NPC密度・既存のシミュレーション更新周期を変更していません。Neural Engineは使用せず、CPU/GPUの不要処理を減らします。
+
+- MAP／静的メニュー中は、直前のカラーグレード済み画像を既存RTからFXAA 1 drawで再表示。街区復元・世界更新・影・空・全シーン再描画を省略します。SafariがWebGL描画バッファを破棄しても黒くならないよう「提出を完全停止」にはしません。UI・音声・ゲームパッドは動作し、Suits／Photo／移動モードは通常描画。サイズ／設定変更とResumeは必ず再描画。
+- 地図のノイズ／走査線／脈動はそのまま。アイコンの並べ替え・重なり解消と地区ラベル配置だけをキャッシュ。パン・ズーム・解除／収集状態・GPSルート・パネル・フォントの変更で再計算し、Canvas解像度は落としません。
+- 交通シミュレーションは全道路の走査を、元の順序を維持したアクティブ道路／駐車道路のリストへ。群衆は静止人口を保守的な空間インデックスで選び、散歩・遊歩道の移動者は遠方の更新も維持。動かない人物の道路判定を**正確なx/z**で再利用。
+- プロップ／屋上植物の候補は共用typed scratchへ。街区の優先選択も安定した線形走査にし、一時配列・全件ソートを減らします。
+- 街区データの属性パックを8192値ずつに分割。以前の全タイル一括変換で約3 msの復元枠を大幅超過する引っかかりを抑えます。変換結果は旧実装とbyte-exactで、CPU/GPUの64 MiB常駐枠も維持。
+- 静的地物は従来の球判定に加えて、よりタイトなAABBで主画面／影それぞれをカリング。画面外から落ちる影は残し、シェーダーで太くなる橋ケーブル等は対象外。材質切替時の同一シャドウ行列もGPUへ再送しません。
+- 30 Hz描画の締切を位相固定にし、小さなRAF遅延が毎回追加のコマ落ちになることを防止。遅れた分の無制限な追いつき更新は行いません。
+
+ソフトウェアCPU比較（180フレーム暖機後。**3D描画時間を除外した処理時間で、実機FPSではありません**）:
+
+| 指標 | 更新前相当 | 更新後 |
+|---|---:|---:|
+| プレイCPU中央値 | 23.5 ms | 21.1 ms |
+| プレイCPU平均 | 27.38 ms | 23.18 ms |
+| サンプル内の最大CPU時間 | 229.3 ms | 62.2 ms |
+| MAP CPU中央値 | 14.8 ms | 1.4 ms |
+| MAP背景の3D描画（テスト場面） | 約463 draws | 1 draw |
+
+測定のばらつきがあり、GPU待ちやSafariの挙動は別です。CPU計測、保守的カリング前後のRGBA全成分一致、MAPの描画保持、車180フレーム／群衆90フレームの状態・行列一致を `deployment/runtime-performance.json` に記録。全ゲームCDN模擬検証も、描画／影の738,912成分で差分0、MAP背景1 draw、タッチスイング／再訪／縦画面／音声を確認。新しい公開版の実CDN結果は `deployment/live-verification.json` を参照してください。
+
 ## ビルド
 
 Node.js 20.19+ または22.12+。
@@ -73,7 +98,7 @@ npm run archive:cdn         # 最後のCDNビルドをZIPに保存
 
 ## 公開と起動
 
-**2026-10-02、初期読み込みクラッシュ対策版を公開・実CDN起動検証済み。** 配信コミットは `deployment/release.json`、公開・実CDN検証状態は `deployment/build-info.json` と `deployment/live-verification.json` に記録します。起動HTMLは **711 bytes**、Data URI は **984 bytes**（末尾改行を除く）。実機で開けた旧URIとは別の、新しいコミットに固定したURIを使用してください。配信コミット: `0ab7b02196d08af57c4d61af5dad3d8220887a10`。[今回の実CDN検証成功](https://github.com/Xavier-Monji/spiderbench/actions/runs/37000927010)。
+**2026-10-03、画質を維持する実行時最適化版を更新。** 配信コミットは `deployment/release.json`、公開・実CDN検証状態は `deployment/build-info.json` と `deployment/live-verification.json` に記録します。起動HTMLは **711 bytes**、Data URI は **984 bytes**（末尾改行を除く）。以前のURIではなく、更新後の40桁SHAに固定したURIを使用してください。公開・ライブ検証が済むまでは `published:false` のままです。
 
 `deployment/launcher.data-uri.txt` の**1行全体**をブラウザのアドレス欄へ貼り付けて開きます。素材を読み込み、街を生成した後、そのままタッチ操作でプレイできます。別途サーバーを用意したり `dist/` を配置したりする必要はありません。`launcher.html` を開いても同じ起動処理になります。初回ダウンロード／生成には待ち時間があり、オフラインでは動きません。
 
@@ -105,22 +130,24 @@ Safari 等では開き方によりData URIのトップレベル遷移が制限�
 ```sh
 npm test                    # 配列／衝突／圧縮レシピ同一性／植物・看板等／画像GLB保持／機器判定／セーブ
 npx playwright install chromium
-npm run test:browser        # タッチ5ケース、軽量GLSL+HDR overflow、キーボード／ゲームパッド
+npm run test:browser        # タッチ／GLSL／画像再表示／地図キャッシュ／NPC同一性／デスクトップ
 npm run build:cdn
 npm run test:cdn            # ローカルdistでCDNを模擬した全ゲーム統合テスト
 CDN_LIVE=1 npm run test:cdn  # 公開済みjsDelivrのみから実ゲームを読み込むライブ検証
 # 別のターミナルでnpm run dev起動中に:
+npm run profile:runtime     # CPU・MAP・ピクセル・描画負荷（A14 FPSではない）
+# 更新前相当とのA/B: PROFILE_URL="http://127.0.0.1:5173/?q=mobile&noruntimecache" npm run profile:runtime
 npm run profile:startup     # Chromiumの起動段階別メモリ（artifacts/startup-memory.json）
 PROFILE_HEAP_MB=384 npm run profile:startup # V8 old-space制限の追加テスト（RAM総量の制限ではありません）
 ```
 
-- `npm test` **34件**、`test:browser` **8件**、全ゲーム `test:cdn` の起動／操作検証が成功。実CDNの結果・CIリンクは `deployment/live-verification.json` を参照。ストリーミングBGMの正常なバッファ／Range読込中断は別記し、4音源のデコード・再生状態にエラーがないことを検証。
+- `npm test` **45件**、`test:browser` **12件**、全ゲーム `test:cdn` の起動／操作検証が成功。実CDNの結果・CIリンクは `deployment/live-verification.json` を参照。ストリーミングBGMの正常なバッファ／Range読込中断は別記し、4音源のデコード・再生状態にエラーがないことを検証。
 - Chromium153 + SwiftShader、1180×820 / DPR2 のタッチ環境で検証。**UA を Safari にしていても Safari エンジンの検証ではありません。**
 - デフォルトのData URI統合テストはCDN応答をローカル `dist/` で模擬します。`CDN_LIVE=1` は応答を差し替えず、実際のCDNからHTML／モジュール／画像／モデルを取得します。JSONレポートの `mode` で両者を区別します。
 - 本番のネイティブ画素予算は1199×833 ≤100万画素で確認。ソフトウェアGPUでの全都市画像キャプチャは `SMOKE_SCALE=0.35` に下げます（`SMOKE_SCALE=0.85 npm run test:cdn` で既定解像度のキャプチャ）。これは本番のスケール下限設定を変えません。
 - 同時の実タッチから移動 `(0.8, 0.6)`、`mode=swing`／`web.active=true`、離して解除、MAP／Mobile固定設定／Resume、縦画面を確認。横／縦の画面中央の画素も検証し、HUDだけ表示されてゲーム画面が黒いケースは失敗にします。遠方へ移動した際にストリーム常駐が0になり、再訪で復元されることと衝突／地図が使用できることも確認。
 - 旧版はユーザーのiPadで初期読み込み中にクラッシュしました。同じソフトウェア環境での段階別サンプルは、起動中の観測ピークが約**1.71 → 1.05 GB**、GC後が約**1.42 → 0.81 GB**（開発ビルド、十進GB）。モバイル本番ビルドをローカルでCDN模擬起動したGC後は約**0.75 GB**。JS/backing-store計測であり、GPU・画像デコーダー・ブラウザ全体のRAMは含みません。サンプル間の瞬間ピークも取り逃がす可能性があります。
-- V8 old-spaceを384 MiBに制限した追加起動テストも完了。これはSafariの再現やRAM総量の上限ではありません。中間版はさらに厳しい256 MiBテストに失敗しており、その制限での最終版の合格を認定するものでもありません。**A14 / Safariの読み込みクラッシュが解消したかは、今回の公開版で実機再確認が必要です。** 詳細は `deployment/startup-memory.json`。
+- V8 old-spaceを384 MiBに制限した追加起動テストも完了。これはSafariの再現やRAM総量の上限ではありません。中間版はさらに厳しい256 MiBテストに失敗しており、その制限での最終版の合格を認定するものでもありません。**初期メモリ対策版はユーザーのiPadでプレイ到達を確認済みですが、今回の実行時最適化版のFPS／長時間安定性は未認定です。** 詳細は `deployment/startup-memory.json`。
 - ショートテストのログ／画像は `artifacts/cdn-smoke.json` と `artifacts/cdn-mobile-{landscape,portrait}.png`（Git対象外）。正常な描画を確認するテストはあり、**A14 での30 fps認定や長時間耐久テストではありません**。
 
 実機の最終受入: 最新の iPadOS Safari で初回起動・10分以上のスイング・屋上移動、街区を何度も往復して常駐が増え続けないこと、3指操作／短いジャンプ／長押しUSE、縦横回転、MAP／設定／戦闘、バックグラウンド復帰、BGMとAAC、context recovery を確認してください。Web Inspector でフレーム時間とメモリ推移も確認し、必要に応じてスケール上限を下げてください。

@@ -118,8 +118,10 @@ function makeHorn() {
   };
 }
 
-export function createTraffic({ scene, roads, phase, geos, mats, models = null }) {
+export function createTraffic({ scene, roads, phase, geos, mats, models = null, cacheLinks = !perf2Off('noruntimecache') }) {
   const { links, nodes } = roads;
+  // Preserve road order and all original simulation tiers; only skip globally inactive/unparked links.
+  const activeLinks = [], parkedLinks = [];
   const tiers = {};
   const all = [];
   // (vehicles r1) per type: hi = LOD0 (cascades 0-1), low = LOD1 (cascade 0-1 too once proxies are on); per LOD2 group
@@ -366,6 +368,7 @@ export function createTraffic({ scene, roads, phase, geos, mats, models = null }
   };
   const stream = (cam) => {
     const R2 = RA * RA, R2o = (RA + 60) ** 2, P2 = PARK_R * PARK_R, P2o = (PARK_R + 50) ** 2;
+    activeLinks.length = 0; parkedLinks.length = 0;
     for (const L of links) {
       const d2 = segDist2(L, cam.x, cam.z) * (L.bridge ? 0.75 : 1); // (citylife bridges) decks stream to 1.15x the radius (seen from afar; LOD2 beyond 230 m)
       L.far = d2 > 330 * 330 ? 2 : d2 > 200 * 200 ? 1 : 0; // (citylife bridges) step tiers: every frame / 2nd / 4th
@@ -377,6 +380,8 @@ export function createTraffic({ scene, roads, phase, geos, mats, models = null }
       }
       if (!L.parked && d2 < P2) L.parked = parkedFor(L);
       else if (L.parked && d2 > P2o) L.parked = null;
+      if (L.active) activeLinks.push(L);
+      if (L.parked?.length) parkedLinks.push(L);
     }
     cars = cars.filter(c => !c.dead);
     refill(cam);
@@ -389,7 +394,7 @@ export function createTraffic({ scene, roads, phase, geos, mats, models = null }
   const refill = (cam) => {
     let want = 0, have = 0;
     const cand = [];
-    for (const L of links) {
+    for (const L of (cacheLinks ? activeLinks : links)) {
       if (!L.active) continue;
       const t = linkTarget(L); want += t; have += L.cars.length;
       if (t - L.cars.length > 0.6) cand.push(L);
@@ -398,14 +403,14 @@ export function createTraffic({ scene, roads, phase, geos, mats, models = null }
     // (citylife bridges) and drain: a link holding far more than its target (bridge traffic pouring into FiDi, a queue that
     // keeps growing) loses a standing car nobody can see, so the density knob bounds both ways and queues can't grow forever
     let drained = 0;
-    for (const L of links) {
+    for (const L of (cacheLinks ? activeLinks : links)) {
       if (!L.active || drained >= 6 || L.cars.length < 3 || L.cars.length <= linkTarget(L) * 1.5 + 2) continue;
       const dx = L.cx - cam.x, dz = L.cz - cam.z;
       sph.center.set(L.cx, 2, L.cz); sph.radius = L.len / 2 + 6;
       if (dx * dx + dz * dz < 260 * 260 && frustumOk && frustum.intersectsSphere(sph)) continue;
       for (const q of L.cars) if (!q.conn && q.v < 0.5 && !q._vis && !(q.reg && q.reg.length)) { q.dead = true; drained++; jStats.drain++; break; }
     }
-    if (drained) { for (const L of links) if (L.active && L.cars.some(q => q.dead)) L.cars = L.cars.filter(q => !q.dead); cars = cars.filter(q => !q.dead); }
+    if (drained) { for (const L of (cacheLinks ? activeLinks : links)) if (L.active && L.cars.some(q => q.dead)) L.cars = L.cars.filter(q => !q.dead); cars = cars.filter(q => !q.dead); }
     const deficit = Math.min(want - have, MAX_CARS - cars.length);
     if (deficit < 1 || !cand.length) return;
     let budget = Math.min(24, Math.ceil(deficit * 0.1)); // ~10 % of the gap per 0.3 s tick
@@ -533,7 +538,7 @@ export function createTraffic({ scene, roads, phase, geos, mats, models = null }
   };
   const step = (dt, far = null) => {
     const lightAv = phase(time, 'av'), lightSt = phase(time, 'st');
-    for (const L of links) {
+    for (const L of (cacheLinks ? activeLinks : links)) {
       if (!L.active || (far !== null && L.far !== far)) continue;
       const arr = L.cars;
       for (let i = 1; i < arr.length; i++) { // insertion sort (nearly sorted)
@@ -542,7 +547,7 @@ export function createTraffic({ scene, roads, phase, geos, mats, models = null }
         arr[j + 1] = c;
       }
     }
-    for (const L of links) {
+    for (const L of (cacheLinks ? activeLinks : links)) {
       if (!L.active || (far !== null && L.far !== far)) continue;
       const arr = L.cars, n = arr.length;
       const light = L.signal ? (L.mapSig ? mapPhase(time, L.axis) : L.axis === 'av' ? lightAv : lightSt) : 2;
@@ -657,7 +662,7 @@ export function createTraffic({ scene, roads, phase, geos, mats, models = null }
       }
     }
     // link / connector transitions
-    for (const L of links) {
+    for (const L of (cacheLinks ? activeLinks : links)) {
       if (!L.active || (far !== null && L.far !== far)) continue;
       const arr = L.cars;
       for (let i = arr.length - 1; i >= 0; i--) {
@@ -677,7 +682,7 @@ export function createTraffic({ scene, roads, phase, geos, mats, models = null }
       }
     }
     // inflow at the edge of the streamed area
-    for (const L of links) {
+    for (const L of (cacheLinks ? activeLinks : links)) {
       if (!L.active || (far !== null && L.far !== far) || cars.length >= MAX_CARS) continue;
       const fromN = nodes[L.from];
       let fed = false;
@@ -787,7 +792,7 @@ export function createTraffic({ scene, roads, phase, geos, mats, models = null }
     near.length = 0;
     const p = player.pos;
     for (const c of cars) if (Math.abs(c.x - p.x) < 40 && Math.abs(c.z - p.z) < 40) near.push(c);
-    for (const L of links) {
+    for (const L of (cacheLinks ? parkedLinks : links)) {
       if (!L.parked || !L.parked.length) continue;
       if (Math.abs(L.cx - p.x) > L.len / 2 + 50 || Math.abs(L.cz - p.z) > L.len / 2 + 50) continue;
       for (const c of L.parked) if (Math.abs(c.x - p.x) < 40 && Math.abs(c.z - p.z) < 40) near.push(c);
@@ -867,7 +872,7 @@ export function createTraffic({ scene, roads, phase, geos, mats, models = null }
       if (moving && d2 < 250 * 250) hlp.push(c.x, c.z, c.ry, VTYPES[c.type].len); // (daynight) headlight pool
     };
     for (const c of cars) { placeCar(c); emit(c, true); }
-    for (const L of links) {
+    for (const L of (cacheLinks ? parkedLinks : links)) {
       if (!L.parked || !L.parked.length) continue;
       const dx = L.cx - cp.x, dz = L.cz - cp.z;
       if (dx * dx + dz * dz > (PARK_R + L.len / 2) ** 2) continue;

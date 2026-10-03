@@ -45,7 +45,7 @@ try {
   const sourceTree = git(['write-tree']);
   if (git(['ls-tree', '--name-only', sourceTree]).split('\n').includes('dist')) throw new Error('dist must not be in the source tree');
   const sourceCommit = git(['commit-tree', sourceTree, '-p', head, '-p', commit,
-    '-m', 'Add memory-bounded iPad controls and publish immutable CDN game']);
+    '-m', process.env.CDN_SOURCE_MESSAGE || 'Publish immutable mobile game build']);
   git(['update-ref', `refs/heads/${SESSION_BRANCH}`, sourceCommit, head]);
   console.log(`Artifact: ${commit} (${(bytes / 1048576).toFixed(1)} MiB, ${assets.length} files)\nSource: ${sourceCommit}`);
   git(['push', 'origin', SESSION_BRANCH]);

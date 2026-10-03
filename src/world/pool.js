@@ -5,6 +5,7 @@ import { getQuality } from '../render/quality.js';
 import { csmShared } from '../render/csm.js';
 import { perf2Off } from './tilebatch.js'; // (perf r2) A/B switch
 const NOWEDGE = perf2Off('nowedge');
+const REUSE_CANDIDATES = !perf2Off('noruntimecache');
 
 // ---- dithered LOD fades. Every Pool writes a per-instance aLod = (in0, in1, out0, out1) (horizontal camera distance):
 // the instance fades IN over [in0, in1] and OUT over [out0, out1] by a screen-space dither (interleaved gradient noise
@@ -50,6 +51,13 @@ export function applyLodFade(mat) {
 const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _p = new THREE.Vector3(), _s = new THREE.Vector3(), _e = new THREE.Euler();
 
 const GRIDS = new WeakMap();
+// Pools repack synchronously, one at a time (matrix scratch above is already shared). Reuse one numeric
+// candidate/index workspace instead of allocating large JS arrays while swinging past dense roof gardens.
+let candidates = new Float64Array(8192), candidateIndices = new Uint32Array(4096);
+function addCandidate(n, index, distance2) {
+  if (n + 2 > candidates.length) { const a = new Float64Array(candidates.length * 2); a.set(candidates); candidates = a; }
+  candidates[n] = index; candidates[n + 1] = distance2; return n + 2;
+}
 
 export class Pool {
   static sortF2B = !new URLSearchParams(globalThis.location?.search ?? '').has('nof2b'); static sortMax = 20000; // (perf r3) A/B: ?nof2b
@@ -176,7 +184,7 @@ export class Pool {
     let k = 0;
     const items = this.items;
     // pass 1: collect candidate indices with distance (only grid cells overlapping the far radius)
-    const cand = [];
+    let candidateLength = 0; const legacyCandidates = REUSE_CANDIDATES ? null : [];
     const C = 64, r = Math.ceil(fr / C);
     const cx = Math.floor(cam.x / C), cz = Math.floor(cam.z / C);
     for (let gx = cx - r; gx <= cx + r; gx++) for (let gz = cz - r; gz <= cz + r; gz++) {
@@ -186,13 +194,18 @@ export class Pool {
         const x = items.xAt ? items.xAt(i) : items[i].x, z = items.zAt ? items.zAt(i) : items[i].z;
         const dx = x - cam.x, dz = z - cam.z;
         const d2 = dx * dx + dz * dz;
-        if (d2 >= n2 && d2 < f2 && (d2 < w2 || dx * wx + dz * wz >= wc * Math.sqrt(d2))) cand.push(i, d2);
+        if (d2 >= n2 && d2 < f2 && (d2 < w2 || dx * wx + dz * wz >= wc * Math.sqrt(d2))) {
+          if (legacyCandidates) legacyCandidates.push(i, d2); else candidateLength = addCandidate(candidateLength, i, d2);
+        }
       }
     }
+    const cand = legacyCandidates || candidates.subarray(0, candidateLength);
     const s2 = (this.shadowFar + moveThresh) ** 2;
     if (cand.length / 2 > this.max) {
       // keep the nearest
-      const idx = []; for (let i = 0; i < cand.length; i += 2) idx.push(i);
+      const n = cand.length >> 1;
+      if (candidateIndices.length < n) candidateIndices = new Uint32Array(Math.max(n, candidateIndices.length * 2));
+      const idx = REUSE_CANDIDATES ? candidateIndices.subarray(0, n) : new Array(n); for (let i = 0; i < n; i++) idx[i] = i * 2;
       idx.sort((a, b) => cand[a + 1] - cand[b + 1]);
       let ns = 0;
       for (let j = 0; j < this.max; j++) { if (cand[idx[j] + 1] < s2) ns = j + 1; this.write(k++, this.itemAt(cand[idx[j]])); }

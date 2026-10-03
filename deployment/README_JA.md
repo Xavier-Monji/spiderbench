@@ -113,7 +113,7 @@ npm run archive:cdn         # 最後のCDNビルドをZIPに保存
 
 ## 公開と起動
 
-**2026-10-03、実機の低FPS報告を受けた追加対策版を更新。** 配信コミットは `deployment/release.json`、公開・実CDN検証状態は `deployment/build-info.json` と `deployment/live-verification.json` に記録します。起動HTMLは **711 bytes**、Data URI は **984 bytes**（末尾改行を除く）。以前のURIではなく更新後の40桁SHAに固定したURIを使用してください。公開・実CDN検証が成功するまでは `published:false` です。
+**2026-10-03、実機の低FPS報告を受けた追加対策版を公開・実CDN検証済み。** 配信コミットは `deployment/release.json`、公開・実CDN検証状態は `deployment/build-info.json` と `deployment/live-verification.json` に記録します。起動HTMLは **711 bytes**、Data URI は **984 bytes**（末尾改行を除く）。以前のURIではなく更新後の40桁SHAに固定したURIを使用してください。配信コミット: `6ed0d3939db019e2d7432371d9aee83eafe3d97d`。[実CDN検証成功](https://github.com/Xavier-Monji/spiderbench/actions/runs/37095327752)。公開・実CDN検証の成功後に `published:true` へ変更しました。
 
 `deployment/launcher.data-uri.txt` の**1行全体**をブラウザのアドレス欄へ貼り付けて開きます。素材を読み込み、街を生成した後、そのままタッチ操作でプレイできます。別途サーバーを用意したり `dist/` を配置したりする必要はありません。`launcher.html` を開いても同じ起動処理になります。初回ダウンロード／生成には待ち時間があり、オフラインでは動きません。
 

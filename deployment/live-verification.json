@@ -1,21 +1,21 @@
 {
-  "verifiedAt": "2026-10-03T04:08:19Z",
+  "verifiedAt": "2026-10-03T07:11:28Z",
   "workflow": "Live CDN launch",
-  "runId": 37095327752,
-  "runUrl": "https://github.com/Xavier-Monji/spiderbench/actions/runs/37095327752",
-  "sourceCommit": "ea185d14054ac0c2f57b093d90dfde9957071e0a",
-  "artifactCommit": "6ed0d3939db019e2d7432371d9aee83eafe3d97d",
+  "runId": 37105285985,
+  "runUrl": "https://github.com/Xavier-Monji/spiderbench/actions/runs/37105285985",
+  "sourceCommit": "77d12fea73c72f0706864bd56818d983cb92deae",
+  "artifactCommit": "821a9ebc7bc465fa93d2e89cd5844b0e5162c65c",
   "conclusion": "success",
-  "method": "Real jsDelivr-only opaque Data URI in GitHub Actions Chromium; no local build/server or interception.",
-  "hardware": "SwiftShader software GPU. NOT an Apple A14/Safari 30fps measurement.",
+  "method": "Real jsDelivr-only opaque Data URI in GitHub Actions Chromium; no local build/server/interception.",
+  "hardware": "SwiftShader software GPU. NOT a physical Apple A14/Safari FPS measurement.",
   "mode": "live",
-  "base": "https://cdn.jsdelivr.net/gh/Xavier-Monji/spiderbench@6ed0d3939db019e2d7432371d9aee83eafe3d97d/dist/",
+  "base": "https://cdn.jsdelivr.net/gh/Xavier-Monji/spiderbench@821a9ebc7bc465fa93d2e89cd5844b0e5162c65c/dist/",
   "stats": {
     "origin": "null",
-    "base": "https://cdn.jsdelivr.net/gh/Xavier-Monji/spiderbench@6ed0d3939db019e2d7432371d9aee83eafe3d97d/dist/",
+    "base": "https://cdn.jsdelivr.net/gh/Xavier-Monji/spiderbench@821a9ebc7bc465fa93d2e89cd5844b0e5162c65c/dist/",
     "quality": "mobile",
     "persistentSave": false,
-    "heapBytes": 752120460,
+    "heapBytes": 752307224,
     "stream": {
       "tiles": 926,
       "ready": 5,
@@ -31,6 +31,13 @@
         "failed": 0,
         "pending": 0,
         "error": null
+      },
+      "cache": {
+        "builds": 5,
+        "admissions": 5,
+        "evictions": 0,
+        "budgetRejects": 0,
+        "repeatBuilds": 0
       }
     },
     "size": {
@@ -39,7 +46,7 @@
     },
     "softwareCaptureScale": 0.35,
     "render": {
-      "calls": 301,
+      "calls": 299,
       "triangles": 3071180
     },
     "landscapeLitFraction": 0.9619836724747167,
@@ -55,19 +62,26 @@
     "eviction": {
       "before": {
         "tiles": 926,
-        "ready": 5,
+        "ready": 6,
         "recipeBytes": 92312493,
-        "residentBytes": 27775222,
-        "peakResidentBytes": 27775222,
+        "residentBytes": 33656836,
+        "peakResidentBytes": 33656836,
         "maxResidentBytes": 67108864,
         "worker": {
           "state": "ready",
-          "started": 0,
-          "completed": 0,
+          "started": 1,
+          "completed": 1,
           "cancelled": 0,
           "failed": 0,
           "pending": 0,
           "error": null
+        },
+        "cache": {
+          "builds": 7,
+          "admissions": 6,
+          "evictions": 0,
+          "budgetRejects": 0,
+          "repeatBuilds": 0
         }
       },
       "far": {
@@ -75,16 +89,23 @@
         "ready": 0,
         "recipeBytes": 92312493,
         "residentBytes": 0,
-        "peakResidentBytes": 27775222,
+        "peakResidentBytes": 33656836,
         "maxResidentBytes": 67108864,
         "worker": {
           "state": "ready",
-          "started": 0,
-          "completed": 0,
+          "started": 1,
+          "completed": 1,
           "cancelled": 0,
           "failed": 0,
           "pending": 0,
           "error": null
+        },
+        "cache": {
+          "builds": 7,
+          "admissions": 6,
+          "evictions": 6,
+          "budgetRejects": 0,
+          "repeatBuilds": 0
         }
       },
       "returned": {
@@ -92,26 +113,43 @@
         "ready": 5,
         "recipeBytes": 92312493,
         "residentBytes": 27775222,
-        "peakResidentBytes": 27775222,
+        "peakResidentBytes": 33656836,
         "maxResidentBytes": 67108864,
         "worker": {
-          "state": "busy",
+          "state": "ready",
           "started": 6,
-          "completed": 5,
+          "completed": 6,
           "cancelled": 0,
           "failed": 0,
-          "pending": 1,
+          "pending": 0,
           "error": null
+        },
+        "cache": {
+          "builds": 12,
+          "admissions": 11,
+          "evictions": 6,
+          "budgetRejects": 0,
+          "repeatBuilds": 5
         }
       },
       "sameRecipes": true,
       "ground": 0,
       "map": true
     },
+    "uploads": {
+      "bytes": 13789196,
+      "completed": 2,
+      "cancelled": 2,
+      "releases": 2,
+      "frameBytes": 90680,
+      "frameAllocations": 1,
+      "maxFrameBytes": 229376,
+      "maxBytesPerFrame": 262144
+    },
     "worker": {
       "state": "busy",
-      "started": 6,
-      "completed": 5,
+      "started": 13,
+      "completed": 12,
       "cancelled": 0,
       "failed": 0,
       "pending": 1,
@@ -128,12 +166,12 @@
     },
     "culling": {
       "before": {
-        "calls": 371,
-        "triangles": 3886030
+        "calls": 441,
+        "triangles": 4987117
       },
       "after": {
-        "calls": 364,
-        "triangles": 3871447
+        "calls": 432,
+        "triangles": 4924249
       },
       "different": 0,
       "components": 738912
@@ -145,7 +183,7 @@
         "cached": true
       },
       "policy": {
-        "worldFrames": 7,
+        "worldFrames": 93,
         "cachedFrames": 4
       },
       "map": {
@@ -163,7 +201,7 @@
       "W": 358,
       "H": 516
     },
-    "portraitLitFraction": 1,
+    "portraitLitFraction": 0.9968545486981587,
     "audio": {
       "ready": true,
       "ctx": "running",
@@ -171,13 +209,13 @@
       "loadErr": null,
       "sprites": [
         "world",
-        "combat",
         "trav",
+        "combat",
         "ui"
       ],
       "loops": [
-        "siren",
-        "alarm"
+        "alarm",
+        "siren"
       ],
       "stems": [
         "day",
@@ -188,39 +226,39 @@
       "streamedMusic": true,
       "music": {
         "started": true,
-        "pos": 25.44,
+        "pos": 35.669,
         "I": 0,
         "night": 0,
-        "day": 0,
+        "day": 1,
         "nightG": 0,
         "pulseA": 0,
         "pulseB": 0
       },
-      "voices": 3,
+      "voices": 4,
       "activeLoops": 0,
       "media": [
         {
           "readyState": 4,
           "paused": false,
-          "time": 23.428934,
+          "time": 33.959184,
           "error": null
         },
         {
           "readyState": 4,
           "paused": false,
-          "time": 23.788844,
+          "time": 34.429388,
           "error": null
         },
         {
           "readyState": 4,
           "paused": false,
-          "time": 23.780136,
+          "time": 34.359728,
           "error": null
         },
         {
           "readyState": 4,
           "paused": false,
-          "time": 23.739501,
+          "time": 34.429388,
           "error": null
         }
       ]
@@ -230,6 +268,6 @@
   "errors": [],
   "failed": [],
   "abortedMedia": 7,
-  "requests": 90,
+  "requests": 89,
   "responses": []
 }

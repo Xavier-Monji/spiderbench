@@ -272,6 +272,57 @@
     "failed": []
   },
   "publication": {
-    "status": "pending real-CDN verification"
+    "status": "live-verified",
+    "artifactCommit": "821a9ebc7bc465fa93d2e89cd5844b0e5162c65c",
+    "sourceCommit": "77d12fea73c72f0706864bd56818d983cb92deae",
+    "base": "https://cdn.jsdelivr.net/gh/Xavier-Monji/spiderbench@821a9ebc7bc465fa93d2e89cd5844b0e5162c65c/dist/",
+    "verifiedAt": "2026-10-03T07:11:28Z",
+    "runUrl": "https://github.com/Xavier-Monji/spiderbench/actions/runs/37105285985",
+    "requests": 89,
+    "uploads": {
+      "bytes": 13789196,
+      "completed": 2,
+      "cancelled": 2,
+      "releases": 2,
+      "frameBytes": 90680,
+      "frameAllocations": 1,
+      "maxFrameBytes": 229376,
+      "maxBytesPerFrame": 262144
+    },
+    "worker": {
+      "state": "busy",
+      "started": 13,
+      "completed": 12,
+      "cancelled": 0,
+      "failed": 0,
+      "pending": 1,
+      "error": null
+    },
+    "cache": {
+      "builds": 12,
+      "admissions": 11,
+      "evictions": 6,
+      "budgetRejects": 0,
+      "repeatBuilds": 5
+    },
+    "nativeBuffer": {
+      "W": 967,
+      "H": 672
+    },
+    "culling": {
+      "before": {
+        "calls": 441,
+        "triangles": 4987117
+      },
+      "after": {
+        "calls": 432,
+        "triangles": 4924249
+      },
+      "different": 0,
+      "components": 738912
+    },
+    "errors": [],
+    "failed": [],
+    "hardwareFpsVerified": false
   }
 }

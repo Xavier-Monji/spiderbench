@@ -8,6 +8,7 @@ const _n = new THREE.Vector3();
 const _nm = new THREE.Matrix3();
 
 export class MB {
+  static workerId = 'MB';
   constructor() { this.p = new GrowBuffer(); this.n = new GrowBuffer(); this.c = new GrowBuffer(); this.uv = new GrowBuffer(); this.part = new GrowBuffer(); this.i = new GrowBuffer(Uint32Array); this.v = 0; this.color = [1, 1, 1]; this.curPart = 0; this.xf = null; }
   setColor(c) { this.color = Array.isArray(c) ? c : [((c >> 16) & 255) / 255, ((c >> 8) & 255) / 255, (c & 255) / 255].map(s => Math.pow(s, 2.2)); return this; }
   setPart(k) { this.curPart = k; return this; }

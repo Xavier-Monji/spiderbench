@@ -10,9 +10,19 @@ export class GpuProfiler {
     this.acc = {};       // name -> {sum, n}
     this.last = {};
   }
+  setEnabled(enabled) {
+    if (enabled && !this.ext) this.ext = this.gl.getExtension('EXT_disjoint_timer_query_webgl2');
+    this.enabled = !!enabled && !!this.ext;
+  }
+  reset() {
+    this.end(); for (const p of this.pending) this.gl.deleteQuery(p.q);
+    for (const q of this.free) this.gl.deleteQuery(q);
+    this.pending = []; this.free = []; this.acc = {}; this.current = null;
+  }
   begin(name) {
     if (!this.enabled) return;
     this.end();
+    if (this.pending.length >= 24) return; // profiling must never build an unbounded GPU query backlog
     const gl = this.gl;
     const q = this.free.pop() || gl.createQuery();
     gl.beginQuery(this.ext.TIME_ELAPSED_EXT, q);
@@ -35,11 +45,12 @@ export class GpuProfiler {
       const ns = gl.getQueryParameter(p.q, gl.QUERY_RESULT);
       this.free.push(p.q);
       if (disjoint) continue;
-      const a = this.acc[p.name] || (this.acc[p.name] = { sum: 0, n: 0 });
-      a.sum += ns / 1e6; a.n++;
+      const a = this.acc[p.name] || (this.acc[p.name] = { sum: 0, n: 0, samples: [] });
+      const ms = ns / 1e6; a.samples.push(ms); a.sum += ms;
+      if (a.samples.length > 60) a.sum -= a.samples.shift(); a.n = a.samples.length;
     }
   }
-  /** average ms per pass since last reset */
+  /** recent average ms per pass (bounded 60 samples), resettable */
   report(reset = false) {
     const out = {};
     let total = 0;

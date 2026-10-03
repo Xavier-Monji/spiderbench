@@ -27,6 +27,7 @@ class GrowBuf {
   take() { return this.a.slice(0, this.length); }
 }
 export class FacadeBuilder {
+  static workerId = 'FacadeBuilder';
   constructor() {
     this.pos = new GrowBuf(); this.nrm = new GrowBuf(); this.uv = new GrowBuf(); this.aF = new GrowBuf(); this.aS = new GrowBuf();
     this.aW = new GrowBuf(); this.aX = new GrowBuf(); this.tint = new GrowBuf(); this.idx = new GrowBuf(Uint32Array); this.n = 0;

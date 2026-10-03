@@ -6,31 +6,33 @@ export function boundedPixelRatio({ width, height, devicePixelRatio = 1, scale =
   return Math.min(ratio, Math.sqrt(budget / Math.max(1, width * height)));
 }
 
-// Slow, hysteretic adaptation. Never resize every frame or count load/resume/pause stalls as gameplay FPS.
+// Fast down / slow up. A severely overloaded 4-10 FPS device must not be mistaken for a suspended tab:
+// the old dt > .25 reset + 90-frame gate prevented adaptation exactly when it was needed most.
 export class ResolutionGovernor {
   constructor(quality, scale = quality.renderScale ?? 1) {
     this.quality = quality; this.ceiling = scale; this.scale = scale; this.reset();
   }
-  reset() { this.elapsed = 0; this.samples = 0; this.slow = 0; this.fast = 0; this.cooldown = 4; }
+  reset() { this.elapsed = 0; this.samples = 0; this.fast = 0; this.cooldown = 1; this.lastFps = null; }
   setCeiling(scale) {
     this.ceiling = Math.min(this.quality.mobile ? 1 : 2, Math.max(this.quality.minRenderScale ?? 0.3, scale));
     this.scale = this.ceiling; this.reset();
   }
   observe(dt) {
-    if (!this.quality.mobile || !Number.isFinite(dt) || dt <= 0 || dt > 0.25) { this.reset(); return false; }
+    if (!this.quality.mobile || !Number.isFinite(dt) || dt <= 0 || dt > 2) { this.reset(); return false; }
     this.cooldown = Math.max(0, this.cooldown - dt);
     this.elapsed += dt; this.samples++;
-    if (this.elapsed < 3) return false;
-    const fps = this.samples / this.elapsed;
+    if (this.elapsed < 1.5 || this.samples < 4) return false;
+    const fps = this.lastFps = this.samples / this.elapsed;
     this.elapsed = 0; this.samples = 0;
-    this.slow = fps < 25 ? this.slow + 1 : 0;
     this.fast = fps > 29 ? this.fast + 1 : 0;
     if (this.cooldown) return false;
     const prev = this.scale;
-    if (this.slow >= 1) this.scale = Math.max(this.quality.minRenderScale, this.scale - 0.08);
-    else if (this.fast >= 5) this.scale = Math.min(this.ceiling, this.scale + 0.04);
-    if (Math.abs(this.scale - prev) < 0.001) return false;
-    this.cooldown = 9; this.slow = this.fast = 0;
+    if (fps < 27) {
+      const estimate = this.scale * Math.sqrt(fps / (this.quality.targetFps || 30)) * .98;
+      this.scale = Math.max(this.quality.minRenderScale, this.scale - .18, Math.min(this.scale - .025, estimate));
+    } else if (this.fast >= 10) this.scale = Math.min(this.ceiling, this.scale + .025);
+    if (Math.abs(this.scale - prev) < .001) return false;
+    this.cooldown = this.scale < prev ? 2 : 12; this.fast = 0;
     return true;
   }
 }

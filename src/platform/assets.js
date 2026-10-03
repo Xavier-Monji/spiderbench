@@ -15,7 +15,7 @@ export function resolveAssetUrl(path, { base = '/', mobile = false, mobileOnly =
   return prefix + asset;
 }
 
-export function runtimeAssetBase(base = '/', moduleUrl = import.meta.url) {
+export function runtimeAssetBase(base = '/', moduleUrl = globalThis.__spiderbenchWorkerModuleUrl || import.meta.url) {
   // Vite's portable production modules are in dist/assets/. data: has no directory of its own,
   // so fetch()/Three loaders must use the module's CDN URL, not location/document URL.
   return base === './' ? new URL('../', moduleUrl).href : base;

@@ -208,6 +208,7 @@ class FBuf {
   out(T = this.T) { return T === this.T ? this.a.slice(0, this.length) : T.from(this.a.subarray(0, this.length)); }
 }
 export class RB {
+  static workerId = 'RB';
   constructor() { this.p = new FBuf(); this.n = new FBuf(); this.uv = new FBuf(); this.c = new FBuf(); this.m = new FBuf(); this.e = new FBuf(); this.i = new FBuf(Uint32Array); this.v = 0; }
   _v(x, y, z, nx, ny, nz, u, v, col, M, E) {
     this.p.push(x, y, z); this.n.push(nx, ny, nz); this.uv.push(u, v); this.c.push(col[0], col[1], col[2]);

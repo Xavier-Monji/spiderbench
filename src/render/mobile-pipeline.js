@@ -4,6 +4,7 @@
 import * as THREE from 'three';
 import { FSPass, makeRT, GLSL_DEPTH, GLSL_COLOR } from './common.js';
 import { GLSL_SKY_COMMON } from './sky.js';
+import { GpuProfiler } from './profiler.js';
 
 // Half-float HDR can overflow on tiny sun/specular highlights. Inf/Inf in bloom or ACES otherwise spreads NaNs
 // into black cross-shaped blocks. Clamp only radiances far beyond display white, before doing that arithmetic.
@@ -13,6 +14,7 @@ const SAFE_HDR = `vec3 safeHDR(vec3 c) {
 }`;
 
 export function createMobilePipeline({ renderer, scene, camera, lighting }) {
+  const gpu = new GpuProfiler(renderer, new URLSearchParams(globalThis.location?.search ?? '').has('prof'));
   const hdr = renderer.extensions.has('EXT_color_buffer_float') ? THREE.HalfFloatType : THREE.UnsignedByteType;
   const reversed = !!renderer.capabilities.reversedDepthBuffer;
   const size = renderer.getDrawingBufferSize(new THREE.Vector2());
@@ -131,8 +133,15 @@ void main() {
 }` });
 
   renderer.toneMapping = THREE.NoToneMapping; renderer.info.autoReset = false;
-  let stats = { calls: 0, triangles: 0 };
+  let stats = { calls: 0, triangles: 0 }, poses = null, profileFrame = 0, sampleGpu = false;
+  const profileEvery = new URLSearchParams(globalThis.location?.search ?? '').has('prof') ? 1 : 15;
+  const beginFrameProfile = () => { sampleGpu = (++profileFrame % profileEvery) === 0; if (sampleGpu) gpu.poll(); };
+  const begin = name => { if (sampleGpu) gpu.begin(name); };
+  const end = () => { if (sampleGpu) gpu.end(); };
   const pipeline = {
+    enableProfiling(on) { gpu.setEnabled(on); },
+    gpuProfilingSupported() { return !!gpu.ext; },
+    setPoseAtlas(atlas) { poses = atlas; },
     grade, passes: { composite, final: fxaa }, gmirror: null, ao: null,
     get size() { return { W, H }; }, get stats() { return { ...stats }; },
     setSize(w, h) {
@@ -144,28 +153,28 @@ void main() {
     },
     // Reuse the existing graded RT. No extra full-resolution cache/copy; same final FXAA pixels.
     present() {
-      renderer.info.reset(); fxaa.render(renderer, null);
+      renderer.info.reset(); beginFrameProfile(); begin('present'); fxaa.render(renderer, null); end();
       stats = { calls: renderer.info.render.calls, triangles: renderer.info.render.triangles, cached: true };
     },
     render() {
-      renderer.info.reset();
+      renderer.info.reset(); beginFrameProfile(); begin('crowdPoses'); poses?.prepare(); begin('scene');
       renderer.setRenderTarget(sceneRT); renderer.setClearColor(0, 1); renderer.clear(); renderer.render(scene, camera);
-      lighting.sky.renderSkyPass(skyRT, camera, depth, W, H, 0, reversed); // stable noise without TAA
+      begin('sky'); lighting.sky.renderSkyPass(skyRT, camera, depth, W, H, 0, reversed); // stable noise without TAA
       bloom.uniforms.uPx.value.set(2 / W, 2 / H); bloom.uniforms.uThreshold.value = grade.bloomThreshold;
-      bloom.render(renderer, bloomA); blur.uniforms.uPx.value.set(2 / bloomA.width, 2 / bloomA.height); blur.render(renderer, bloomB);
+      begin('bloom'); bloom.render(renderer, bloomA); begin('blur'); blur.uniforms.uPx.value.set(2 / bloomA.width, 2 / bloomA.height); blur.render(renderer, bloomB);
       const u = composite.uniforms, fog = lighting.fog, tod = lighting.tod;
       u.uProjInv.value.copy(camera.projectionMatrixInverse); u.uCamWorld.value.copy(camera.matrixWorld); u.uCamPos.value.copy(camera.position);
       u.uFogDensity.value = fog.density; u.uFogFalloff.value = fog.heightFalloff; u.uFogStart.value = fog.startDistance; u.uFogTint.value.copy(fog.tint);
       u.uMoonDir.value.copy(lighting.moon.dir); u.uMoonK.value = lighting.moon.k;
       u.uExposure.value = grade.exposure * tod.exposure; u.uBloomStrength.value = grade.bloom * tod.bloom;
       u.uSaturation.value = grade.saturation; u.uContrast.value = grade.contrast; u.uVignette.value = grade.vignette; u.uAspect.value = W / H;
-      composite.render(renderer, gradedRT); fxaa.render(renderer, null);
+      begin('grade'); composite.render(renderer, gradedRT); begin('fxaa'); fxaa.render(renderer, null); end();
       stats = { calls: renderer.info.render.calls, triangles: renderer.info.render.triangles };
     },
     // API compatibility: mobile intentionally never allocates these effects, including in photo mode.
     setFocus() {}, setAperture() {}, setDof() {}, setDofFar() {}, setAutoFocus() {}, setMotionBlur() {},
-    resetHistory() {}, resetExposure() {}, timings() { return {}; }, prepareMaterials() {},
-    dispose() { for (const rt of [sceneRT, skyRT, gradedRT, bloomA, bloomB]) rt.dispose();
+    resetHistory() { poses?.reset(); gpu.reset(); }, resetExposure() {}, timings(reset) { const r = gpu.report(reset); return Object.keys(r).length > 1 ? r : { total: null }; }, prepareMaterials() {},
+    dispose() { gpu.reset(); for (const rt of [sceneRT, skyRT, gradedRT, bloomA, bloomB]) rt.dispose();
       for (const pass of [bloom, blur, composite, fxaa]) { pass.material.dispose(); const i = FSPass.all.indexOf(pass); if (i >= 0) FSPass.all.splice(i, 1); } },
   };
   return pipeline;

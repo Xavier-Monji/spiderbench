@@ -10,7 +10,7 @@ export const PRESETS = {
     ssr: false, ssgi: false, taa: false, shafts: false, wet: false, planarReflections: false,
     cloudSteps: 10, cloudLightSteps: 2, cloudNoiseSize: 64, envSize: 64,
     bloomLevels: 3, dofTaps: 0, mbSamples: 0, sharpen: 0.15,
-    pixelRatioCap: 1.25, renderScale: 0.85, minRenderScale: 0.6, maxBufferPixels: 1000000,
+    pixelRatioCap: 1.25, renderScale: 0.75, minRenderScale: 0.5, maxBufferPixels: 650000,
     targetFps: 30, cameraFar: 6000, facadeNear: 420, detailFar: 240, worldFar: 2400,
     propFar: 1000, textureAnisotropy: 4, collisionCell: 0.05,
     streamResidentBytes: 64 * 1048576, streamBootBytes: 24 * 1048576, streamBootTiles: 12,

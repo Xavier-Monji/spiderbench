@@ -12,6 +12,7 @@ export function createTouchControls(ctx) {
   root.setAttribute('aria-label', 'Touch controls');
   root.innerHTML = `<div class="touch-toolbar">
     <span class="touch-hint">LEFT PAD · MOVE　 /　 DRAG CITY · LOOK</span>
+    <button data-nav="perf" aria-label="Toggle performance diagnostics">FPS</button>
     <button data-nav="help" aria-label="Touch controls help">?</button>
     <button data-nav="map" aria-label="Open map">MAP</button>
     <button data-nav="menu" aria-label="Pause and settings">MENU</button>
@@ -111,6 +112,7 @@ export function createTouchControls(ctx) {
     knob.style.transform = ''; root.querySelectorAll('.held').forEach(el => el.classList.remove('held'));
   }
   async function navigate(name) {
+    if (name === 'perf') { clear(); ctx.diagnostics?.toggle(); return; }
     if (name === 'help' || name === 'help-close') { const help = root.querySelector('.touch-help'); help.hidden = name === 'help-close' || !help.hidden; clear(); return; }
     if (name === 'more') { const extra = root.querySelector('.touch-extra'); extra.hidden = !extra.hidden;
       root.querySelector('[data-nav="more"]').setAttribute('aria-expanded', String(!extra.hidden)); return; }

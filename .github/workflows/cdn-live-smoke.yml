@@ -30,7 +30,7 @@ jobs:
       - name: CDN diagnostics
         if: always()
         run: |
-          node --input-type=module -e "import fs from 'node:fs'; const r=JSON.parse(fs.readFileSync('artifacts/cdn-smoke.json')); console.log('::notice title=CDN smoke report::'+JSON.stringify({...r,abortedMedia:r.abortedMedia.length,requests:r.requests.length,responses:r.responses.filter(v=>v.status>=400)}));"
+          node --input-type=module -e "import fs from 'node:fs'; const r=JSON.parse(fs.readFileSync('artifacts/cdn-smoke.json')); console.log('::notice title=CDN smoke report::'+JSON.stringify({...r,stats:{...r.stats,audio:r.stats?.audio?{...r.stats.audio,media:r.stats.audio.media?.map(({src,...m})=>m)}:undefined},abortedMedia:r.abortedMedia.length,requests:r.requests.length,responses:r.responses.filter(v=>v.status>=400)}));"
       - uses: actions/upload-artifact@v7
         if: always()
         with:

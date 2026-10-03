@@ -1,49 +1,12 @@
 // Keep compact construction recipes for distant tiles, not millions of expanded vertices. The very same
 // builders are replayed as the camera approaches, in small CPU slices; geometry/collision precision is unchanged.
 import * as THREE from 'three';
-import { deflateSync, inflateSync, strToU8, strFromU8 } from 'fflate';
+import { deflateSync, strToU8 } from 'fflate';
+import { keyOf, expandPacket } from './recipe-codec.js';
+import { unpackGeometry } from './geometry-transfer.js';
 import { GrowBuffer } from './buffer.js';
 import { compactGeometry, compactGeometrySteps } from '../render/geometry-budget.js';
 
-// JSON snapshots avoid retaining recursively cloned JS arrays/objects for every distant tile. Read the source
-// value before JSON's toJSON hook (notably Color.toJSON, which would quantize linear colour to a hex integer).
-// Explicit markers preserve nested THREE values, undefined properties, sparse arrays, non-finite values and -0.
-const snapshotTypes = ['Matrix4', 'Matrix3', 'Color', 'Vector2', 'Vector3', 'Quaternion'];
-const tag = (type, data) => ({ $sb: data === undefined ? [type] : [type, data] });
-const keyOf = (value, references, referenceIds) => JSON.stringify(value, function (key, v) {
-  const source = this[key];
-  if (source === undefined) return tag(Array.isArray(this) && !Object.hasOwn(this, key) ? 'hole' : 'undefined');
-  if (typeof source === 'number' && (!Number.isFinite(source) || Object.is(source, -0))) return tag('number', String(Object.is(source, -0) ? '-0' : source));
-  if (typeof source === 'function') {
-    let id = referenceIds.get(source);
-    if (id === undefined) { id = references.length; referenceIds.set(source, id); references.push(source); }
-    return tag('reference', id);
-  }
-  if (source && typeof source === 'object') for (const type of snapshotTypes) {
-    if (source?.['is' + type]) return tag(type, source.toArray());
-  }
-  // Escape user data that happens to have our marker name.
-  if (source && typeof source === 'object' && Object.hasOwn(source, '$sb')) return tag('object', Object.entries(source));
-  return v;
-});
-const HOLE = Symbol('recipe array hole');
-function restoreSnapshot(key, references) {
-  const restore = value => {
-    if (!value || typeof value !== 'object') return value;
-    if (value.$sb) {
-      const [type, data] = value.$sb;
-      if (type === 'undefined') return undefined;
-      if (type === 'hole') return HOLE;
-      if (type === 'number') return Number(data);
-      if (type === 'reference') return references[data];
-      if (type === 'object') return Object.fromEntries(data.map(([k, v]) => [k, restore(v)]));
-      return new THREE[type]().fromArray(data.map(restore));
-    }
-    for (const k of Object.keys(value)) { const v = restore(value[k]); if (v === HOLE) delete value[k]; else value[k] = v; }
-    return value;
-  };
-  return restore(JSON.parse(key));
-}
 const bitCount = n => { let count = 0; for (let i = 0; i < 6; i++) count += !!(n & (1 << i)); return count; };
 function detailVertices(name, a) {
   if (name === 'vert') return 1;
@@ -107,32 +70,14 @@ export function deferredBuilder(Builder, { methods, role, cx, cz, range, returns
     compress: seal,
     get bytes() { seal(); return chunks.reduce((n, c) => n + c.data.byteLength + c.snapshots.byteLength, 0); },
     get commands() { return commandCount; },
+    // Structured-cloneable only when all arguments are data and the worker knows the builder.
+    packet() {
+      seal();
+      if (references.length || !['MB', 'FacadeBuilder', 'RB'].includes(Builder.workerId)) return null;
+      return { version: 1, builder: Builder.workerId, names, chunks, role };
+    },
     *expand(options = {}) {
-      seal(); const builder = new Builder();
-      for (const chunk of chunks) {
-        const raw = inflateSync(chunk.data); let offset = 0, cursor = 0;
-        const part = (n, Type) => { const a = raw.slice(offset, offset + n); offset += n; return new Type(a.buffer); };
-        const lengths = chunk.lengths;
-        const payload = { codes: part(lengths[0], Uint8Array), arities: part(lengths[1], Uint8Array),
-          args: part(lengths[2], Uint8Array), numbers: part(lengths[3], Float64Array) };
-        const snapshots = JSON.parse(strFromU8(inflateSync(chunk.snapshots))), restored = new Map();
-        const object = id => { if (!restored.has(id)) restored.set(id, restoreSnapshot(snapshots[id], references)); return restored.get(id); };
-        const readToken = () => { let n = 0, shift = 1, byte;
-          do { byte = payload.args[cursor++]; n += (byte & 127) * shift; shift *= 128; } while (byte & 128);
-          return n;
-        };
-        for (let i = 0; i < payload.codes.length; i++) {
-          const args = [];
-          for (let j = 0; j < payload.arities[i]; j++) {
-            const t = readToken();
-            args.push(t >= 8 ? (t & 1 ? object((t - 9) / 2) : payload.numbers[(t - 8) / 2])
-              : t === 0 ? undefined : t === 1 ? true : t === 2 ? false : t === 3 ? null : -0);
-          }
-          builder[names[payload.codes[i]]](...args);
-          if ((i & 63) === 63) yield;
-        }
-      }
-      return builder.build({ ...options, consume: true });
+      seal(); return yield* expandPacket(Builder, { names, chunks }, options, references);
     },
   };
   let proxy;
@@ -175,7 +120,7 @@ const geometryBytes = g => Object.values(g.attributes).reduce((n, a) => n + a.ar
 export function createGeometryStreamer(scene, { budgetMs = 3, maxResidentBytes = 64 * 1048576 } = {}) {
   const entries = [];
   scene.traverse(m => { const g = m.geometry, s = g?.userData.streaming; if (s) entries.push({ g, s, bytes: 0, d: Infinity }); });
-  let job = null, residentBytes = 0, peakResidentBytes = 0;
+  let job = null, residentBytes = 0, peakResidentBytes = 0, worker = null;
   const legacy = new URLSearchParams(globalThis.location?.search ?? '').has('noruntimecache');
   const priority = { facade: 0, roof: 5, detail: 30, roofAO: 50, roofStreaks: 60 };
   function evict(entry) {
@@ -194,7 +139,7 @@ export function createGeometryStreamer(scene, { budgetMs = 3, maxResidentBytes =
     const now = performance.now();
     for (const e of entries) {
       e.d = distance(p, e.s.recipe);
-      if (e.d > e.s.recipe.range + 256) { evict(e); if (job?.entry === e) job = null; }
+      if (e.d > e.s.recipe.range + 256) { evict(e); if (job?.entry === e) { if (job.workerId) worker?.cancel(job.workerId); job = null; } }
     }
     while (performance.now() - now < budget) {
       if (!job) {
@@ -209,9 +154,22 @@ export function createGeometryStreamer(scene, { budgetMs = 3, maxResidentBytes =
           if (value < score) { score = value; next = e; }
         }
         if (!next) break;
+        const packet = !legacy && worker ? next.s.recipe.packet?.() : null;
+        if (packet && next.s.recipe.bytes <= 8 * 1048576 && worker.available) {
+          const task = worker.submit(packet, next.s.options);
+          if (task) {
+            const work = job = { entry: next, workerId: task.id, packet: undefined, error: null };
+            task.promise.then(result => { if (job === work) work.packet = result; }, error => { if (job === work) work.error = error; });
+            break;
+          }
+        }
+        // A cancelled worker still owns one build; do not queue another build/copy behind it.
+        if (packet && worker.busy) break;
         job = { entry: next, iterator: legacy ? next.s.recipe.expand(next.s.options) : expandEntry(next) };
       }
-      const result = job.iterator.next();
+      if (job.workerId && job.error) { job = { entry: job.entry, iterator: expandEntry(job.entry) }; }
+      if (job.workerId && job.packet === undefined) break;
+      const result = job.workerId ? { done: true, value: unpackGeometry(job.packet) } : job.iterator.next();
       if (result.done) {
         const e = job.entry, g = result.value; job = null;
         if (!g) { e.s.ready = true; continue; }
@@ -233,6 +191,7 @@ export function createGeometryStreamer(scene, { budgetMs = 3, maxResidentBytes =
   }
   return {
     update,
+    setWorker(client) { worker = client; },
     async prime(p, { maxBytes = Math.min(maxResidentBytes, 24 * 1048576), maxTiles = 12, radius = 160 } = {}) {
       // Only the spawn neighbourhood is expanded before play. Do not fill the entire runtime budget at boot,
       // and never mark all buffers GPU-ready: batchTiles uploads one attribute at a time behind the LOD fallback.
@@ -244,6 +203,6 @@ export function createGeometryStreamer(scene, { budgetMs = 3, maxResidentBytes =
       }
     },
     get stats() { return { tiles: entries.length, ready: entries.filter(e => e.s.ready).length,
-      recipeBytes: entries.reduce((n, e) => n + e.s.recipe.bytes, 0), residentBytes, peakResidentBytes, maxResidentBytes }; },
+      recipeBytes: entries.reduce((n, e) => n + e.s.recipe.bytes, 0), residentBytes, peakResidentBytes, maxResidentBytes, worker: worker?.stats ?? null }; },
   };
 }

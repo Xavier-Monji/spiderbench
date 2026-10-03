@@ -26,6 +26,10 @@ import { createTouchControls } from './ui/touch-controls.js';
 import { createFramePolicy, stepGameFrame } from './render/frame-policy.js';
 import { installBoxFrustumCulling, markBoxCullable } from './render/box-culling.js';
 import { nextFrameDeadline } from './render/frame-clock.js';
+import { createGeometryWorker } from './world/geometry-worker.js';
+import { createCrowdPoseAtlas } from './render/crowd-poses.js';
+import { FrameTelemetry } from './render/frame-telemetry.js';
+import { createPerformancePanel } from './ui/performance.js';
 
 const params = new URLSearchParams(location.search);
 const shotName = params.get('shot');
@@ -63,13 +67,16 @@ const world = await buildCity({ scene, renderer });
 if (quality.mobile && !params.has('noruntimecache')) {
   ctxBoxCulling = installBoxFrustumCulling(); markBoxCullable(scene);
 }
+const crowdPoses = quality.mobile && !params.has('nopose') ? createCrowdPoseAtlas(renderer, world.life?.crowd) : null;
+const geometryWorker = quality.mobile && !params.has('noworker') ? createGeometryWorker() : null;
+world.streamer?.setWorker(geometryWorker);
 const input = createInput(renderer.domElement);
 await boot.stage('player');
 const player = await createPlayer({ scene, world, camera, input, renderer });
 await boot.stage('shaders');
 const hud = createHud({ player, world, camera });
 const pipeline = createPipeline({ renderer, scene, camera, lighting });
-resolution.attach(pipeline);
+resolution.attach(pipeline); pipeline.setPoseAtlas?.(crowdPoses);
 
 const resize = () => {
   camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); resolution.resize();
@@ -78,10 +85,13 @@ const resize = () => {
 addEventListener('resize', resize);
 window.visualViewport?.addEventListener('resize', resize);
 
-const ctx = { THREE, renderer, scene, camera, lighting, world, player, hud, pipeline, input, quality, resolution, boxCulling: ctxBoxCulling };
+const ctx = { THREE, renderer, scene, camera, lighting, world, player, hud, pipeline, input, quality, resolution, boxCulling: ctxBoxCulling, geometryWorker, crowdPoses };
 ctx.systems = ctx.systems || []; // C5: game systems (src/game/**) push {update(dt)} here
 ctx.framePolicy = createFramePolicy(ctx);
+ctx.telemetry = new FrameTelemetry();
 window.__ctx = ctx;
+ctx.diagnostics = createPerformancePanel(ctx);
+ctx.systems.push(ctx.diagnostics);
 const touchControls = ctx.touchControls = createTouchControls(ctx);
 if (touchControls) ctx.systems.push(touchControls);
 // Release latched gestures and stop GPU submissions while Safari suspends the tab or loses the GL context.
@@ -91,10 +101,10 @@ contextMessage.textContent = 'Graphics context interrupted — tap to reload if 
 contextMessage.style.cssText = 'display:none;position:fixed;inset:35% 10%;z-index:1100;background:#091325;color:white;border:1px solid #e3262f;border-radius:12px;padding:24px;font:16px system-ui';
 contextMessage.addEventListener('click', () => location.reload()); document.body.appendChild(contextMessage);
 renderer.domElement.addEventListener('webglcontextlost', e => { e.preventDefault(); contextLost = true;
-  input.clear(); touchControls?.clear(); resolution.reset(); contextMessage.style.display = 'block'; });
+  input.clear(); touchControls?.clear(); resolution.reset(); ctx.telemetry.reset(); contextMessage.style.display = 'block'; });
 renderer.domElement.addEventListener('webglcontextrestored', () => { contextLost = false;
   pipeline.resetHistory?.(); resolution.resize(); contextMessage.style.display = 'none'; });
-document.addEventListener('visibilitychange', () => { input.clear(); touchControls?.clear(); resolution.reset(); });
+document.addEventListener('visibilitychange', () => { input.clear(); touchControls?.clear(); resolution.reset(); ctx.telemetry.reset(); });
 // (perf r3) queue every shader program the game can draw (main pass + the river mirror's unshadowed variant + the
 // post passes) before the first frame: they link in parallel on the driver's threads during the loading frame instead
 // of one by one later, each freezing the game for 0.2-6 s the first time its material came into view
@@ -150,7 +160,8 @@ if (shotName) {
     if (interval && now + 0.75 < nextFrame) return;
     const realDt = lastFrame == null ? 1 / (quality.targetFps || 60) : (now - lastFrame) / 1000;
     lastFrame = now; nextFrame = nextFrameDeadline(nextFrame, now, interval);
-    if (framesDrawn > 90 && ctx.flow?.isPlaying) resolution.observeFrame(realDt);
+    if (framesDrawn >= 4 && ctx.flow?.isPlaying) resolution.observeFrame(realDt);
     frame(Math.min(realDt, 1 / 20));
+    ctx.telemetry.observe(realDt, ctx.flow?.mode ?? 'play');
   });
 }

@@ -28,7 +28,7 @@ page.on('response', r => {
   if (!r.url().startsWith(info.base)) errors.push('Unexpected CDN response ' + r.url());
   if (r.status() >= 400) errors.push('CDN HTTP ' + r.status() + ': ' + r.url());
 });
-if (!live) await page.route('https://cdn.jsdelivr.net/**', async route => {
+if (!live) await page.context().route('https://cdn.jsdelivr.net/**', async route => {
   const url = route.request().url();
   if (!url.startsWith(info.base)) { errors.push('Unexpected CDN request ' + url); return route.abort(); }
   const name = decodeURIComponent(url.slice(info.base.length).split('?')[0]);
@@ -69,7 +69,7 @@ try {
     persistentSave: __ctx.sys.save.persistent, heapBytes: performance.memory?.usedJSHeapSize,
     stream: __ctx.world.streamer.stats, size: __ctx.pipeline.size }));
   assert.equal(stats.origin, 'null'); assert.equal(stats.base, info.base); assert.equal(stats.quality, 'mobile'); assert.equal(stats.persistentSave, false);
-  assert.ok(stats.size.W * stats.size.H <= 1000000);
+  assert.ok(stats.size.W * stats.size.H <= 650000);
   assert.ok(stats.stream.residentBytes <= stats.stream.maxResidentBytes);
   console.log((live ? 'LIVE CDN' : 'MOCKED CDN') + ' Data URI loaded:', JSON.stringify(stats));
   // SwiftShader has no A14 GPU. Test the native backing-store budget above, but render captures at a smaller
@@ -119,6 +119,10 @@ try {
   assert.equal(stats.eviction.far.residentBytes, 0); assert.equal(stats.eviction.far.ready, 0);
   assert.ok(stats.eviction.returned.residentBytes > 0);
   assert.ok(stats.eviction.returned.residentBytes <= stats.eviction.returned.maxResidentBytes);
+  stats.worker = await page.evaluate(() => __ctx.geometryWorker?.stats);
+  assert.ok(stats.worker && stats.worker.completed > 0 && stats.worker.failed === 0, 'Opaque-origin geometry worker did not build a tile');
+  stats.poseAtlas = await page.evaluate(() => __ctx.crowdPoses?.stats);
+  assert.ok(stats.poseAtlas && stats.poseAtlas.bakedFrames > 0 && !stats.poseAtlas.disabled, 'GPU crowd pose cache was not active');
   assert.ok(stats.eviction.sameRecipes); assert.ok(Number.isFinite(stats.eviction.ground)); assert.ok(stats.eviction.map);
   // Same fixed scene/light state: conservative AABB culling may reduce draws, never change final pixels.
   stats.culling = await page.evaluate(() => {
@@ -161,7 +165,7 @@ try {
     for (let i = 0; i < 3; i++) { await new Promise(resolve => requestAnimationFrame(resolve)); __ctx.stepFrame(1 / 30); }
   });
   stats.portraitSize = await page.evaluate(() => __ctx.pipeline.size);
-  assert.ok(stats.portraitSize.W * stats.portraitSize.H <= 1000000);
+  assert.ok(stats.portraitSize.W * stats.portraitSize.H <= 650000);
   stats.portraitLitFraction = await captureGame('artifacts/cdn-mobile-portrait.png', 90000);
   // Validate the actual streamed elements, not just the request lifecycle: normal buffering/seek cancellations
   // are not broken audio. HTTP/CORS/decoder/network failures still fail this test.

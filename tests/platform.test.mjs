@@ -47,10 +47,10 @@ test('Retina / portrait / large displays respect a hard million-pixel backing st
 test('adaptive resolution has a floor, a user ceiling, hysteresis and ignores suspended frames', () => {
   const g = new ResolutionGovernor(PRESETS.mobile);
   for (let i = 0; i < 1200; i++) g.observe(1 / 20);
-  assert.equal(g.scale, 0.6);
+  assert.equal(g.scale, PRESETS.mobile.minRenderScale);
   for (let i = 0; i < 4500; i++) g.observe(1 / 30);
-  assert.equal(g.scale, 0.85);
-  g.observe(5); assert.equal(g.scale, 0.85);
+  assert.equal(g.scale, PRESETS.mobile.renderScale);
+  g.observe(5); assert.equal(g.scale, PRESETS.mobile.renderScale);
   g.setCeiling(4); assert.equal(g.ceiling, 1);
 });
 test('launcher is one tiny document that fetches HTML instead of trying to navigate to text/plain CDN HTML', () => {

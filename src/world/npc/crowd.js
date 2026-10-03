@@ -12,6 +12,7 @@ import { assetUrl } from '../../platform/assets.js';
 //    wave, cheer, point, clap; they step back when he lands close, dodge when he walks into them; world.alarm()
 //    makes them cower/flee.
 import * as THREE from 'three';
+import { GLSL_BONE_TRANSFORMS } from './bone-shader.js';
 import { getQuality } from '../../render/quality.js';
 import { G, mulberry32, streetsAt, inPark, shoreX, VMAP, MAPS, vmapAt } from '../layout.js'; // (layout2 r3) VMAP, vmapAt: Village walkers
 import { PARK_MEADOWS, meadowDist } from '../trees.js';
@@ -143,35 +144,7 @@ function skinningGLSL(nb) {
     // (peds r2) optional parts (hairstyles, hat, glasses, bag, scarf): bit aOpt of the instance mask (iX.w / 512)
     bool optHidden() { return aRA.z > 0.5 && mod(floor(floor(iX.w / 512.0) / aRA.z), 2.0) < 0.5; }
     uniform sampler2D uAnim; uniform float uTime; uniform vec3 uNeck; uniform vec3 uHead;
-    mat4 bmRow(int row, int b) {
-      ivec2 c = ivec2(b * 3, row);
-      vec4 r0 = texelFetch(uAnim, c, 0), r1 = texelFetch(uAnim, c + ivec2(1, 0), 0), r2 = texelFetch(uAnim, c + ivec2(2, 0), 0);
-      return mat4(r0.x, r1.x, r2.x, 0.0, r0.y, r1.y, r2.y, 0.0, r0.z, r1.z, r2.z, 0.0, r0.w, r1.w, r2.w, 1.0);
-    }
-    mat4 clipBone(vec4 C, int b) {
-      float len = C.y;
-      float fr = mod((uTime - C.w) * C.z * 30.0, len);
-      if (fr < 0.0) fr += len;
-      int f0 = int(floor(fr)); int f1 = f0 + 1; if (float(f1) >= len) f1 = 0;
-      float t = fract(fr);
-      int r = int(C.x + 0.5);
-      return bmRow(r + f0, b) * (1.0 - t) + bmRow(r + f1, b) * t;
-    }
-    mat4 lookRot(vec3 p, float yaw, float pitch) {
-      float cy = cos(yaw), sy = sin(yaw), cp = cos(pitch), sp = sin(pitch);
-      mat4 Ry = mat4(cy, 0.0, -sy, 0.0, 0.0, 1.0, 0.0, 0.0, sy, 0.0, cy, 0.0, 0.0, 0.0, 0.0, 1.0);
-      mat4 Rx = mat4(1.0, 0.0, 0.0, 0.0, 0.0, cp, sp, 0.0, 0.0, -sp, cp, 0.0, 0.0, 0.0, 0.0, 1.0);
-      mat4 T = mat4(1.0); T[3] = vec4(p, 1.0);
-      mat4 Ti = mat4(1.0); Ti[3] = vec4(-p, 1.0);
-      return T * Ry * Rx * Ti;
-    }
-    mat4 boneM(int b, float w) {
-      mat4 m = clipBone(iA, b);
-      if (w < 0.999) m = clipBone(iB, b) * (1.0 - w) + m * w;
-      if (b == 4) m = m * lookRot(uHead, iX.y * 0.6, iX.z * 0.7);
-      else if (b == 3) m = m * lookRot(uNeck, iX.y * 0.4, iX.z * 0.3);
-      return m;
-    }
+    ${GLSL_BONE_TRANSFORMS}
     mat4 skinMatrix() {
       float w = clamp((uTime - iX.x) / 0.3, 0.0, 1.0);
       mat4 m = boneM(int(aSI.x + 0.5), w) * aSW.x;
@@ -183,7 +156,7 @@ function skinningGLSL(nb) {
 }
 
 function makeMaterials(animTex, meta, pedTex, bakeTex) {
-  const uni = { uAnim: { value: animTex }, uTime: { value: 0 }, uPed: { value: pedTex }, uBake: { value: bakeTex }, uBakeOn: { value: bakeTex ? 1 : 0 }, uFaceSkin: { value: FACE_SKIN.map(c => new THREE.Vector3(...c)) }, uNeck: { value: new THREE.Vector3(...meta.bones[3].head) },
+  const uni = { uPoseAtlas: { value: null }, uAnim: { value: animTex }, uTime: { value: 0 }, uPed: { value: pedTex }, uBake: { value: bakeTex }, uBakeOn: { value: bakeTex ? 1 : 0 }, uFaceSkin: { value: FACE_SKIN.map(c => new THREE.Vector3(...c)) }, uNeck: { value: new THREE.Vector3(...meta.bones[3].head) },
     uHead: { value: new THREE.Vector3(...meta.bones[4].head) } };
   const common = skinningGLSL(meta.nb);
   const mat = new THREE.MeshStandardMaterial({ roughness: 0.8, metalness: 0 });
@@ -1739,6 +1712,13 @@ export async function createCrowd({ scene, blocks, parkPaths, props, roads, phas
   let frame = 0;
   const api = {
     agents, statics, pools: allPools,
+    animation: { texture: animTex, bones: meta.bones, nb: meta.nb, uniforms: uni },
+    get frame() { return frame; },
+    disablePoseAtlas() { for (const m of [mat, depth]) { if (m.defines) delete m.defines.NPC_POSE_ATLAS; m.needsUpdate = true; } },
+    enablePoseAtlas(texture) {
+      uni.uPoseAtlas.value = texture;
+      for (const m of [mat, depth]) { m.defines = { ...m.defines, NPC_POSE_ATLAS: '' }; m.needsUpdate = true; }
+    },
     invalidateStatics() { staticIndex?.invalidate(); }, // tools that directly edit a static actor's position
     setPlayer(st) {
       player.pos.copy(st.pos); player.vel.copy(st.vel); player.air = st.air; player.ground = st.ground ?? 0;

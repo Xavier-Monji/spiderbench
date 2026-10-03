@@ -217,6 +217,50 @@
     "failed": []
   },
   "publication": {
-    "status": "pending live-CDN verification"
+    "status": "live-verified",
+    "artifactCommit": "992524d410fc7f9204f1bf4e0089c583f165cb52",
+    "sourceCommit": "31273dac56d40ea27f23e1ab62cdd0efaa20a370",
+    "verificationSourceCommit": "97226ec83bd0ea8d8a57c62c0669441074dbf4d9",
+    "base": "https://cdn.jsdelivr.net/gh/Xavier-Monji/spiderbench@992524d410fc7f9204f1bf4e0089c583f165cb52/dist/",
+    "verifiedAt": "2026-10-03T01:28:30Z",
+    "runUrl": "https://github.com/Xavier-Monji/spiderbench/actions/runs/37086090082",
+    "requests": 85,
+    "heapAfterStartupGc": 751984342,
+    "culling": {
+      "before": {
+        "calls": 374,
+        "triangles": 3910597
+      },
+      "after": {
+        "calls": 368,
+        "triangles": 3896015
+      },
+      "different": 0,
+      "components": 738912
+    },
+    "backgroundCache": {
+      "draw": {
+        "calls": 1,
+        "triangles": 1,
+        "cached": true
+      },
+      "policy": {
+        "worldFrames": 7,
+        "cachedFrames": 4
+      },
+      "map": {
+        "icons": {
+          "builds": 1,
+          "hits": 4
+        },
+        "labels": {
+          "builds": 1,
+          "hits": 4
+        }
+      }
+    },
+    "errors": [],
+    "failed": [],
+    "hardwareVerified": false
   }
 }

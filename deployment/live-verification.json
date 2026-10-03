@@ -1,7 +1,186 @@
 {
-  "status": "pending",
-  "hardwareVerified": false,
-  "previousVerifiedArtifact": "0ab7b02196d08af57c4d61af5dad3d8220887a10",
-  "previousVerificationRun": "https://github.com/Xavier-Monji/spiderbench/actions/runs/37000927010",
-  "note": "Runtime optimization build is locally tested; this is not proof of the newly published artifact until the live-CDN run succeeds."
+  "verifiedAt": "2026-10-03T01:28:30Z",
+  "workflow": "Live CDN launch",
+  "runId": 37086090082,
+  "runUrl": "https://github.com/Xavier-Monji/spiderbench/actions/runs/37086090082",
+  "sourceCommit": "97226ec83bd0ea8d8a57c62c0669441074dbf4d9",
+  "gameSourceCommit": "31273dac56d40ea27f23e1ab62cdd0efaa20a370",
+  "artifactCommit": "992524d410fc7f9204f1bf4e0089c583f165cb52",
+  "conclusion": "success",
+  "method": "GitHub Actions Chromium, actual jsDelivr-only opaque-origin Data URI. No build, local server or interception.",
+  "hardware": "Software GPU, NOT an A14/Safari hardware FPS test",
+  "mode": "live",
+  "base": "https://cdn.jsdelivr.net/gh/Xavier-Monji/spiderbench@992524d410fc7f9204f1bf4e0089c583f165cb52/dist/",
+  "stats": {
+    "origin": "null",
+    "base": "https://cdn.jsdelivr.net/gh/Xavier-Monji/spiderbench@992524d410fc7f9204f1bf4e0089c583f165cb52/dist/",
+    "quality": "mobile",
+    "persistentSave": false,
+    "heapBytes": 751984342,
+    "stream": {
+      "tiles": 926,
+      "ready": 5,
+      "recipeBytes": 92312493,
+      "residentBytes": 27775222,
+      "peakResidentBytes": 27775222,
+      "maxResidentBytes": 67108864
+    },
+    "size": {
+      "W": 1199,
+      "H": 833
+    },
+    "softwareCaptureScale": 0.35,
+    "render": {
+      "calls": 300,
+      "triangles": 3071179
+    },
+    "landscapeLitFraction": 0.9619930453365326,
+    "touch": {
+      "move": {
+        "x": 0.8,
+        "y": 0.6
+      },
+      "swing": true,
+      "mode": "swing",
+      "web": true
+    },
+    "eviction": {
+      "before": {
+        "tiles": 926,
+        "ready": 5,
+        "recipeBytes": 92312493,
+        "residentBytes": 27775222,
+        "peakResidentBytes": 27775222,
+        "maxResidentBytes": 67108864
+      },
+      "far": {
+        "tiles": 926,
+        "ready": 0,
+        "recipeBytes": 92312493,
+        "residentBytes": 0,
+        "peakResidentBytes": 27775222,
+        "maxResidentBytes": 67108864
+      },
+      "returned": {
+        "tiles": 926,
+        "ready": 5,
+        "recipeBytes": 92312493,
+        "residentBytes": 27775222,
+        "peakResidentBytes": 27775222,
+        "maxResidentBytes": 67108864
+      },
+      "sameRecipes": true,
+      "ground": 0,
+      "map": true
+    },
+    "culling": {
+      "before": {
+        "calls": 374,
+        "triangles": 3910597
+      },
+      "after": {
+        "calls": 368,
+        "triangles": 3896015
+      },
+      "different": 0,
+      "components": 738912
+    },
+    "backgroundCache": {
+      "draw": {
+        "calls": 1,
+        "triangles": 1,
+        "cached": true
+      },
+      "policy": {
+        "worldFrames": 7,
+        "cachedFrames": 4
+      },
+      "map": {
+        "icons": {
+          "builds": 1,
+          "hits": 4
+        },
+        "labels": {
+          "builds": 1,
+          "hits": 4
+        }
+      }
+    },
+    "portraitSize": {
+      "W": 358,
+      "H": 516
+    },
+    "portraitLitFraction": 1,
+    "audio": {
+      "ready": true,
+      "ctx": "running",
+      "sr": 44100,
+      "loadErr": null,
+      "sprites": [
+        "combat",
+        "world",
+        "ui",
+        "trav"
+      ],
+      "loops": [
+        "siren",
+        "alarm"
+      ],
+      "stems": [
+        "day",
+        "night",
+        "pulseA",
+        "pulseB"
+      ],
+      "streamedMusic": true,
+      "music": {
+        "started": true,
+        "pos": 25.551,
+        "I": 0.006,
+        "night": 0,
+        "day": 0.999,
+        "nightG": 0,
+        "pulseA": 0,
+        "pulseB": 0
+      },
+      "voices": 4,
+      "activeLoops": 0,
+      "media": [
+        {
+          "src": "https://cdn.jsdelivr.net/gh/Xavier-Monji/spiderbench@992524d410fc7f9204f1bf4e0089c583f165cb52/dist/assets/audio/music_day.ogg",
+          "readyState": 4,
+          "paused": false,
+          "time": 19.127894,
+          "error": null
+        },
+        {
+          "src": "https://cdn.jsdelivr.net/gh/Xavier-Monji/spiderbench@992524d410fc7f9204f1bf4e0089c583f165cb52/dist/assets/audio/music_night.ogg",
+          "readyState": 4,
+          "paused": false,
+          "time": 15.058637,
+          "error": null
+        },
+        {
+          "src": "https://cdn.jsdelivr.net/gh/Xavier-Monji/spiderbench@992524d410fc7f9204f1bf4e0089c583f165cb52/dist/assets/audio/music_pulseA.ogg",
+          "readyState": 4,
+          "paused": false,
+          "time": 19.139548,
+          "error": null
+        },
+        {
+          "src": "https://cdn.jsdelivr.net/gh/Xavier-Monji/spiderbench@992524d410fc7f9204f1bf4e0089c583f165cb52/dist/assets/audio/music_pulseB.ogg",
+          "readyState": 4,
+          "paused": false,
+          "time": 19.13955,
+          "error": null
+        }
+      ]
+    }
+  },
+  "boot": {},
+  "errors": [],
+  "failed": [],
+  "abortedMedia": 4,
+  "requests": 85,
+  "responses": []
 }
